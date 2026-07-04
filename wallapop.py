@@ -5,6 +5,7 @@ Módulo de precios de mercado via Wallapop API.
 - Delay aleatorio entre llamadas
 - Devuelve URL del anuncio de referencia más barato
 """
+from __future__ import annotations
 
 import json
 import time

@@ -2,6 +2,7 @@
 Servidor local del panel de control.
 Sirve la UI y gestiona la comunicación con el scraper.
 """
+from __future__ import annotations
 import json
 import os
 import glob

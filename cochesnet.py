@@ -9,6 +9,7 @@ Módulo de precios de mercado via coches.net.
 - Extrae datos del script __INITIAL_PROPS__ (JSON escapado dentro del HTML)
 - Caché diario por clave marca/modelo/año_grupo
 """
+from __future__ import annotations
 
 import json
 import re

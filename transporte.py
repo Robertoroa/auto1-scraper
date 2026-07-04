@@ -2,6 +2,7 @@
 Módulo para obtener opciones de transporte desde la página de producto de Auto1.
 Usa Playwright para visitar la ficha del coche y extraer la opción más barata con sus días.
 """
+from __future__ import annotations
 
 import logging
 import re
