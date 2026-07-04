@@ -21,6 +21,7 @@ UI_DIR = BASE_DIR / "ui"
 RESULTS_DIR = BASE_DIR / "resultados"
 CONFIG_FILE = BASE_DIR / "config.json"
 PROFILES_FILE = BASE_DIR / "profiles.json"
+LOG_FILE = BASE_DIR / "last_run.log"
 
 RESULTS_DIR.mkdir(exist_ok=True)
 
@@ -43,6 +44,18 @@ class PanelHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/last-excel":
             self._handle_last_excel()
+        elif self.path == "/last-log":
+            try:
+                if LOG_FILE.exists():
+                    content = LOG_FILE.read_text(encoding="utf-8")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/plain; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(content.encode("utf-8"))
+                else:
+                    self._json_response({"error": "Sin log todavía"})
+            except Exception as e:
+                self._json_response({"error": str(e)})
         elif self.path == "/scraper-status":
             self._handle_scraper_status()
         elif self.path == "/load-config":
@@ -212,14 +225,18 @@ class PanelHandler(SimpleHTTPRequestHandler):
                     text=True,
                     cwd=str(BASE_DIR)
                 )
-                for line in proc.stdout:
-                    line = line.rstrip()
-                    if line:
-                        scraper_state["log"].append(line)
-                        # Mantener solo los últimos 100 logs
-                        
+                with open(LOG_FILE, "w", encoding="utf-8") as lf:
+                    for line in proc.stdout:
+                        line = line.rstrip()
+                        if line:
+                            scraper_state["log"].append(line)
+                            lf.write(line + "\n")
+                            lf.flush()
                 proc.wait()
-                scraper_state["log"].append(f"✅ Proceso terminado (código {proc.returncode})")
+                done = f"✅ Proceso terminado (código {proc.returncode})"
+                scraper_state["log"].append(done)
+                with open(LOG_FILE, "a", encoding="utf-8") as lf:
+                    lf.write(done + "\n")
             except Exception as e:
                 scraper_state["log"].append(f"❌ Error: {e}")
             finally:
@@ -279,13 +296,18 @@ class PanelHandler(SimpleHTTPRequestHandler):
                     text=True,
                     cwd=str(BASE_DIR)
                 )
-                for line in proc.stdout:
-                    line = line.rstrip()
-                    if line:
-                        scraper_state["log"].append(line)
-                        
+                with open(LOG_FILE, "w", encoding="utf-8") as lf:
+                    for line in proc.stdout:
+                        line = line.rstrip()
+                        if line:
+                            scraper_state["log"].append(line)
+                            lf.write(line + "\n")
+                            lf.flush()
                 proc.wait()
-                scraper_state["log"].append(f"✅ Proceso terminado (código {proc.returncode})")
+                done = f"✅ Proceso terminado (código {proc.returncode})"
+                scraper_state["log"].append(done)
+                with open(LOG_FILE, "a", encoding="utf-8") as lf:
+                    lf.write(done + "\n")
             except Exception as e:
                 scraper_state["log"].append(f"❌ Error: {e}")
             finally:
