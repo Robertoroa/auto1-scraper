@@ -8,3 +8,9 @@ profile_*/
 browser_profile/
 auto1_manual_*.json
 .security/
+cookies.json
+google_credentials.json
+profiles.json
+model_generations.json
+*.plist
+start_tunnel.sh
