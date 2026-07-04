@@ -5,3 +5,6 @@ __pycache__/
 logs/
 resultados/
 profile_*/
+browser_profile/
+auto1_manual_*.json
+.security/

@@ -1,4 +1,0 @@
-{
-  "commands": ["localhost:8765", "127.0.0.1:8765"],
-  "paths": ["auto1-scraper/google_credentials.json", "auto1-scraper/.env", "auto1-scraper/auth.py"]
-}
