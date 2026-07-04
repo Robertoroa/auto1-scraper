@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auto1 — Resultados</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --accent: #6c63ff;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --card-radius: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(15,17,23,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .header h1 { font-size: 1.1rem; font-weight: 700; }
+    .header .sub { font-size: 0.82rem; color: var(--muted); }
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .back-btn:hover { background: #232636; }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      padding: 16px 24px 0;
+    }
+    .tab {
+      padding: 8px 18px;
+      border-radius: 8px 8px 0 0;
+      border: 1px solid var(--border);
+      border-bottom: none;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .tab.active { background: #232636; color: var(--text); border-color: var(--accent); }
+
+    /* ── Sort bar ── */
+    .sort-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.82rem;
+      color: var(--muted);
+      flex-wrap: wrap;
+    }
+    .sort-bar label { display: flex; align-items: center; gap: 6px; }
+    .sort-bar select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 5px 10px;
+      font-size: 0.82rem;
+    }
+    .count-badge {
+      margin-left: auto;
+      background: var(--accent);
+      color: #fff;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    /* ── Grid ── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 20px;
+      padding: 20px 24px 40px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--card-radius);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform .15s, border-color .15s;
+    }
+    .card:hover { transform: translateY(-2px); border-color: #3a3d50; }
+
+    /* Slider */
+    .slider {
+      position: relative;
+      height: 200px;
+      background: #12141e;
+      overflow: hidden;
+    }
+    .slider img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .slider img.active { opacity: 1; }
+    .slider-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--muted);
+      font-size: 0.8rem;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .slider-placeholder svg { opacity: .3; }
+    .slider-arrows {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 8px;
+      pointer-events: none;
+    }
+    .arr-btn {
+      pointer-events: all;
+      background: rgba(0,0,0,.55);
+      border: none;
+      color: #fff;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .15s;
+    }
+    .arr-btn:hover { background: rgba(0,0,0,.8); }
+    .slider-dots {
+      position: absolute;
+      bottom: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 4px;
+    }
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.35);
+      transition: background .2s;
+    }
+    .dot.active { background: #fff; }
+    .foto-count {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(0,0,0,.6);
+      font-size: 0.72rem;
+      padding: 2px 7px;
+      border-radius: 12px;
+    }
+    .canal-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 12px;
+      letter-spacing: .04em;
+    }
+    .canal-badge.subasta { background: #7c3aed; }
+    .canal-badge.compra { background: #0369a1; }
+
+    /* Body */
+    .card-body { padding: 14px 16px; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+    .car-title { font-size: 1rem; font-weight: 700; line-height: 1.3; }
+    .car-meta { font-size: 0.78rem; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
+    .car-meta span { display: flex; align-items: center; gap: 3px; }
+
+    /* Precios */
+    .prices {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .price-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 12px;
+    }
+    .price-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+    .price-value { font-size: 1.05rem; font-weight: 700; }
+    .price-box.full { grid-column: span 2; }
+    .price-box.highlight { border-color: var(--accent); background: rgba(108,99,255,.08); }
+
+    /* Rentabilidad */
+    .rent-row {
+      display: flex;
+      gap: 8px;
+    }
+    .rent-pill {
+      flex: 1;
+      border-radius: 10px;
+      padding: 8px 10px;
+      text-align: center;
+      border: 1px solid transparent;
+    }
+    .rent-pill .pill-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+    .rent-pill .pill-pct { font-size: 1.1rem; font-weight: 800; margin-top: 1px; }
+    .rent-pill .pill-margen { font-size: 0.72rem; color: var(--muted); margin-top: 1px; }
+    .rent-pill.pos { background: rgba(34,197,94,.1); border-color: rgba(34,197,94,.25); }
+    .rent-pill.pos .pill-pct { color: var(--green); }
+    .rent-pill.neg { background: rgba(239,68,68,.1); border-color: rgba(239,68,68,.25); }
+    .rent-pill.neg .pill-pct { color: var(--red); }
+    .rent-pill.neu { background: rgba(245,158,11,.1); border-color: rgba(245,158,11,.25); }
+    .rent-pill.neu .pill-pct { color: var(--yellow); }
+    .rent-pill.na { background: var(--bg); border-color: var(--border); }
+    .rent-pill.na .pill-pct { color: var(--muted); font-size: 0.85rem; }
+
+    /* CTAs */
+    .ctas { display: flex; gap: 8px; margin-top: auto; padding-top: 2px; }
+    .cta-btn {
+      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 9px 12px;
+      border-radius: 9px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid transparent;
+      transition: opacity .15s;
+      cursor: pointer;
+    }
+    .cta-btn:hover { opacity: .85; }
+    .cta-auto1 { background: #1d4ed8; color: #fff; }
+    .cta-wallapop { background: #13a163; color: #fff; }
+    .cta-cochesnet { background: var(--surface); color: var(--text); border-color: var(--border); }
+    .cta-btn[disabled], .cta-btn.disabled { opacity: .35; pointer-events: none; }
+
+    /* Empty / Loading */
+    .state-msg {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 0 auto 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <a class="back-btn" href="/">← Panel</a>
+  <div>
+    <div class="header h1">Resultados Auto1</div>
+    <div class="sub" id="last-updated">Cargando...</div>
+  </div>
+  <button class="back-btn" onclick="cargarResultados()">↻ Actualizar</button>
+  <button class="back-btn" style="margin-left:auto" onclick="descargarHTML()">⬇ Descargar HTML</button>
+</div>
+
+<div class="tabs" id="tabs"></div>
+
+<div class="sort-bar">
+  <label>Ordenar por
+    <select id="sort-select" onchange="renderCanalActivo()">
+      <option value="rent_wp">Rentabilidad Wallapop ↓</option>
+      <option value="rent_cn">Rentabilidad coches.net ↓</option>
+      <option value="precio_asc">Precio Auto1 ↑</option>
+      <option value="precio_desc">Precio Auto1 ↓</option>
+      <option value="margen_wp">Margen Wallapop ↓</option>
+    </select>
+  </label>
+  <span class="count-badge" id="count-badge">0 coches</span>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<script>
+// ── Estado ──────────────────────────────────────────────────────────
+let allData = {};      // { "24h": [...], "ip": [...] }
+let canalActivo = null;
+
+// ── Carga inicial ────────────────────────────────────────────────────
+async function cargarResultados() {
+  document.getElementById('grid').innerHTML = '<div class="state-msg"><div class="spinner"></div>Cargando resultados...</div>';
+  try {
+    const r = await fetch('/api/resultados');
+    const json = await r.json();
+    if (json.error && !json.canales) {
+      mostrarError(json.error); return;
+    }
+    allData = json.canales || {};
+    document.getElementById('last-updated').textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-ES');
+    construirTabs();
+    renderCanalActivo();
+  } catch(e) {
+    mostrarError('No se pudo conectar con el servidor (' + e.message + ')');
+  }
+}
+
+function mostrarError(msg) {
+  document.getElementById('grid').innerHTML = `<div class="state-msg">⚠️ ${msg}</div>`;
+}
+
+// ── Tabs ─────────────────────────────────────────────────────────────
+function construirTabs() {
+  const canales = Object.keys(allData);
+  if (!canales.length) return;
+  if (!canalActivo || !allData[canalActivo]) canalActivo = canales[0];
+
+  const labels = { '24h': '🔨 Subasta 24h', 'ip': '⚡ Compra Ahora' };
+  document.getElementById('tabs').innerHTML = canales.map(c =>
+    `<div class="tab ${c === canalActivo ? 'active' : ''}" onclick="cambiarCanal('${c}')">${labels[c] || c} (${(allData[c]||[]).length})</div>`
+  ).join('');
+}
+
+function cambiarCanal(c) {
+  canalActivo = c;
+  construirTabs();
+  renderCanalActivo();
+}
+
+// ── Render ────────────────────────────────────────────────────────────
+function renderCanalActivo() {
+  const sort = document.getElementById('sort-select').value;
+  let coches = (allData[canalActivo] || []).slice();
+
+  const sorters = {
+    rent_wp:    (a,b) => (b.rentabilidad_wallapop_pct ?? -999) - (a.rentabilidad_wallapop_pct ?? -999),
+    rent_cn:    (a,b) => (b.rentabilidad_cochesnet_pct ?? -999) - (a.rentabilidad_cochesnet_pct ?? -999),
+    precio_asc: (a,b) => (a.precio_auto1 ?? 0) - (b.precio_auto1 ?? 0),
+    precio_desc:(a,b) => (b.precio_auto1 ?? 0) - (a.precio_auto1 ?? 0),
+    margen_wp:  (a,b) => (b.margen_wallapop ?? -999999) - (a.margen_wallapop ?? -999999),
+  };
+  coches.sort(sorters[sort] || sorters.rent_wp);
+
+  document.getElementById('count-badge').textContent = coches.length + ' coche' + (coches.length !== 1 ? 's' : '');
+
+  if (!coches.length) {
+    document.getElementById('grid').innerHTML = '<div class="state-msg">Sin resultados para este canal.</div>';
+    return;
+  }
+
+  document.getElementById('grid').innerHTML = coches.map((c, i) => cardHTML(c, i)).join('');
+
+  // Inicializar sliders después del render
+  document.querySelectorAll('.slider[data-imgs]').forEach(el => {
+    const imgs = JSON.parse(el.dataset.imgs);
+    if (!imgs.length) return;
+    let cur = 0;
+    const imgEls = el.querySelectorAll('img');
+    const dots = el.querySelectorAll('.dot');
+
+    function goTo(idx) {
+      cur = (idx + imgs.length) % imgs.length;
+      imgEls.forEach((img, i) => img.classList.toggle('active', i === cur));
+      dots.forEach((d, i) => d.classList.toggle('active', i === cur));
+    }
+    goTo(0);
+    el.querySelector('.arr-prev')?.addEventListener('click', e => { e.stopPropagation(); goTo(cur - 1); });
+    el.querySelector('.arr-next')?.addEventListener('click', e => { e.stopPropagation(); goTo(cur + 1); });
+  });
+}
+
+// ── Card HTML ─────────────────────────────────────────────────────────
+function cardHTML(c, i) {
+  const marca   = c.marca || '';
+  const modelo  = c.modelo || '';
+  const año     = c.año || '';
+  const km      = c.km ? (c.km / 1000).toFixed(0) + 'k km' : '—';
+  const pais    = c.pais || '';
+  const ref     = c.referencia || '';
+  const imgs    = c.imagenes || [];
+  const esSubasta = (c.tipo_compra || '').toLowerCase().includes('subasta');
+
+  const precioAuto1 = fmt(c.precio_auto1);
+  const costeTotal  = fmt(c.coste_total);
+  const transp      = c.transporte_coste ? fmt(c.transporte_coste) : '—';
+
+  const wpPct = c.rentabilidad_wallapop_pct;
+  const cnPct = c.rentabilidad_cochesnet_pct;
+
+  const auto1Url    = c.auto1_url || '#';
+  const wallapopUrl = c.wallapop_ref_url || c.wallapop_listing_url || '';
+  const cochesnetUrl = c.cochesnet_url || '';
+
+  return `
+<div class="card">
+  <div class="slider" ${imgs.length ? `data-imgs='${JSON.stringify(imgs)}'` : ''}>
+    ${imgs.length
+      ? imgs.map(u => `<img src="${u}" alt="" loading="lazy"/>`).join('')
+      : `<div class="slider-placeholder">
+           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="m21 15-5-5L5 19"/></svg>
+           Sin fotos
+         </div>`
+    }
+    ${imgs.length > 1 ? `
+    <div class="slider-arrows">
+      <button class="arr-btn arr-prev">‹</button>
+      <button class="arr-btn arr-next">›</button>
+    </div>
+    <div class="slider-dots">${imgs.map((_,i) => `<div class="dot${i===0?' active':''}"></div>`).join('')}</div>
+    <span class="foto-count">📷 ${imgs.length}</span>
+    ` : ''}
+    <span class="canal-badge ${esSubasta ? 'subasta' : 'compra'}">${c.tipo_compra || 'Auto1'}</span>
+  </div>
+
+  <div class="card-body">
+    <div class="car-title">${marca} ${modelo}</div>
+    <div class="car-meta">
+      <span>📅 ${año}</span>
+      <span>🛣 ${km}</span>
+      ${pais ? `<span>🌍 ${pais}</span>` : ''}
+      ${ref ? `<span>🔖 ${ref}</span>` : ''}
+    </div>
+
+    <div class="prices">
+      <div class="price-box">
+        <div class="price-label">Precio Auto1</div>
+        <div class="price-value">${precioAuto1}</div>
+      </div>
+      <div class="price-box">
+        <div class="price-label">Transporte</div>
+        <div class="price-value">${transp}</div>
+      </div>
+      <div class="price-box full highlight">
+        <div class="price-label">Coste total (Auto1 + transp + comisión)</div>
+        <div class="price-value">${costeTotal}</div>
+      </div>
+    </div>
+
+    <div class="rent-row">
+      ${rentPill('Wallapop', wpPct, c.margen_wallapop, c.precio_mercado_wallapop)}
+      ${rentPill('coches.net', cnPct, c.margen_cochesnet, c.precio_mercado_cochesnet)}
+    </div>
+
+    <div class="ctas">
+      <a class="cta-btn cta-auto1" href="${auto1Url}" target="_blank">🚗 Auto1</a>
+      <a class="cta-btn cta-wallapop ${wallapopUrl ? '' : 'disabled'}" href="${wallapopUrl || '#'}" target="_blank">🟢 Wallapop</a>
+      <a class="cta-btn cta-cochesnet ${cochesnetUrl ? '' : 'disabled'}" href="${cochesnetUrl || '#'}" target="_blank">🔍 coches.net</a>
+    </div>
+  </div>
+</div>`;
+}
+
+function rentPill(label, pct, margen, precioMercado) {
+  let cls = 'na', pctStr = 'N/D', margenStr = '';
+  if (pct !== null && pct !== undefined) {
+    pctStr = (pct > 0 ? '+' : '') + pct.toFixed(1) + '%';
+    margenStr = margen !== null && margen !== undefined
+      ? `${margen > 0 ? '+' : ''}${fmt(margen)} marg.`
+      : '';
+    if (pct >= 10) cls = 'pos';
+    else if (pct >= 0) cls = 'neu';
+    else cls = 'neg';
+  }
+  const mercStr = precioMercado ? `Mercado: ${fmt(precioMercado)}` : '';
+  return `
+<div class="rent-pill ${cls}">
+  <div class="pill-label">${label}</div>
+  <div class="pill-pct">${pctStr}</div>
+  ${mercStr ? `<div class="pill-margen">${mercStr}</div>` : ''}
+  ${margenStr ? `<div class="pill-margen">${margenStr}</div>` : ''}
+</div>`;
+}
+
+function fmt(n) {
+  if (n === null || n === undefined) return '—';
+  return Number(n).toLocaleString('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+}
+
+// ── Descarga HTML ─────────────────────────────────────────────────────
+function descargarHTML() {
+  // Tomar el HTML actual de la página (con los datos ya renderizados)
+  const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const fecha = new Date().toISOString().slice(0,16).replace('T','_').replace(':','h');
+  a.download = `auto1_resultados_${fecha}.html`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────
+cargarResultados();
+</script>
+</body>
+</html>

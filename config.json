@@ -1,0 +1,41 @@
+{
+  "filtros": {
+    "channel": "24h",
+    "countries": [
+      "ES"
+    ],
+    "testDriveFindings": "none",
+    "accidents": false,
+    "sort": "relevanceSorting",
+    "dir": "asc",
+    "mileageFrom": 0,
+    "mileageTo": 130000,
+    "priceMin": 2000,
+    "priceMax": 9000,
+    "regFrom": 2016,
+    "regTo": 2026,
+    "makes": [],
+    "bodyTypes": [
+      "commercial",
+      "van"
+    ],
+    "uploadedFrom": null,
+    "uploadedTo": null,
+    "pageSize": 100
+  },
+  "seguridad": {
+    "max_coches": 10,
+    "dry_run": false,
+    "delay_entre_requests_segundos": 3
+  },
+  "schedule": {
+    "hora_scraping_1": "13:30",
+    "hora_scraping_2": "18:30"
+  },
+  "mercado": {
+    "buscar_wallapop": true,
+    "buscar_cochesnet": true,
+    "min_anuncios_para_precio_fiable": 3
+  },
+  "google_sheets_id": "1ugSu-uDVZYnVWyFrq02xYo8Fm14Ui9ZW-3z9YBwHxgY"
+}

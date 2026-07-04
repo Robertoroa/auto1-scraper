@@ -1,0 +1,14 @@
+2026/07/03-02:06:31.838 871c32 Reusing MANIFEST /Users/roberto/Documents/auto1-scraper/browser_profile/Default/Local Storage/leveldb/MANIFEST-000001
+2026/07/03-02:06:31.863 871c32 Recovering log #400
+2026/07/03-02:06:31.864 871c32 Level-0 table #402: started
+2026/07/03-02:06:31.869 871c32 Level-0 table #402: 28076 bytes OK
+2026/07/03-02:06:31.871 871c32 Delete type=0 #400
+2026/07/03-02:06:31.871 871c37 Compacting 4@0 + 1@1 files
+2026/07/03-02:06:31.874 871c37 Generated table #404@0: 13 keys, 28586 bytes
+2026/07/03-02:06:31.874 871c37 Compacted 4@0 + 1@1 files => 28586 bytes
+2026/07/03-02:06:31.875 871c37 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/07/03-02:06:31.875 871c37 Delete type=2 #402
+2026/07/03-02:06:31.876 871c37 Delete type=2 #399
+2026/07/03-02:06:31.876 871c37 Delete type=2 #396
+2026/07/03-02:06:31.876 871c37 Delete type=2 #393
+2026/07/03-02:06:31.876 871c37 Delete type=2 #391

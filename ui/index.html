@@ -1,0 +1,1815 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auto1 Scraper — Panel de Control</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #222; }
+
+    .header {
+      background: #1a1a2e;
+      color: white;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 { font-size: 20px; font-weight: 600; }
+    .header .badge { background: #e63946; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+    .badge.safe { background: #2a9d8f; }
+
+    .container { max-width: 900px; margin: 32px auto; padding: 0 16px; }
+
+    /* VERTICALES */
+    .verticales { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 28px; }
+    .vertical-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .vertical-card:hover:not(.blocked) { border-color: #e07b39; transform: translateY(-2px); }
+    .vertical-card.active { border-color: #e07b39; background: #fff8f5; }
+    .vertical-card.blocked { opacity: 0.5; cursor: not-allowed; background: #f8f8f8; }
+    .vertical-card .icon { font-size: 32px; margin-bottom: 8px; }
+    .vertical-card h3 { font-size: 14px; font-weight: 600; }
+    .vertical-card p { font-size: 11px; color: #888; margin-top: 4px; }
+    .blocked-label {
+      position: absolute; top: 8px; right: 8px;
+      background: #e63946; color: white;
+      font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 20px;
+    }
+    .channel-badge {
+      display: inline-block; margin-top: 8px;
+      background: #eee; color: #555;
+      font-size: 10px; padding: 2px 8px; border-radius: 20px;
+      font-family: monospace;
+    }
+    .vertical-card.active .channel-badge { background: #e07b39; color: white; }
+
+    /* SECCIÓN */
+    .section {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .section h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* GRID DE FILTROS */
+    .filters-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .filter-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .filter-group input, .filter-group select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    .filter-group input:focus, .filter-group select:focus {
+      outline: none;
+      border-color: #e07b39;
+    }
+    .range-row { display: flex; gap: 8px; align-items: center; }
+    .range-row span { color: #aaa; font-size: 12px; }
+    .range-row input { flex: 1; }
+
+    /* SEGURIDAD */
+    .security-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    .security-item {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+    .security-item .value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #2a9d8f;
+    }
+    .security-item label { font-size: 11px; color: #888; display: block; margin-top: 4px; }
+
+    .dry-run-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #fff3cd;
+      border: 1.5px solid #ffc107;
+      border-radius: 10px;
+      padding: 14px 20px;
+      margin-top: 16px;
+    }
+    .dry-run-toggle .info { flex: 1; }
+    .dry-run-toggle .info strong { font-size: 14px; }
+    .dry-run-toggle .info p { font-size: 12px; color: #666; margin-top: 2px; }
+
+    /* TOGGLE */
+    .toggle { position: relative; display: inline-block; width: 48px; height: 26px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #ccc;
+      transition: .3s; border-radius: 26px;
+    }
+    .slider:before {
+      position: absolute; content: "";
+      height: 20px; width: 20px;
+      left: 3px; bottom: 3px;
+      background-color: white;
+      transition: .3s; border-radius: 50%;
+    }
+    input:checked + .slider { background-color: #2a9d8f; }
+    input:checked + .slider:before { transform: translateX(22px); }
+
+    /* FECHAS */
+    .dates-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* SCHEDULE */
+    .schedule-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* BOTONES */
+    .actions { display: flex; gap: 12px; margin-top: 24px; }
+    .btn {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: #e07b39; color: white; }
+    .btn-primary:hover { background: #c96a2a; }
+    .btn-secondary { background: #eee; color: #555; }
+    .btn-secondary:hover { background: #ddd; }
+    .btn-run { background: #2a9d8f; color: white; }
+    .btn-run:hover { background: #238577; }
+    .btn-run:disabled { background: #aaa; cursor: not-allowed; }
+
+    /* ESTADO */
+    .status-bar {
+      background: white;
+      border-radius: 12px;
+      padding: 16px 24px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-left: 4px solid #2a9d8f;
+    }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #2a9d8f; }
+    .status-text { font-size: 13px; color: #555; flex: 1; }
+    .status-text strong { color: #222; }
+
+    /* EXCEL CARD */
+    .excel-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      border: 2px dashed #d0d0d0;
+      transition: border-color 0.2s;
+    }
+    .excel-card:hover { border-color: #217346; }
+    .excel-icon { font-size: 40px; flex-shrink: 0; }
+    .excel-info { flex: 1; }
+    .excel-info h3 { font-size: 15px; font-weight: 700; color: #217346; }
+    .excel-info p { font-size: 12px; color: #888; margin-top: 4px; }
+    .excel-info .file-path { font-size: 11px; color: #aaa; font-family: monospace; margin-top: 6px; }
+    .btn-excel {
+      background: #217346;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .btn-excel:hover { background: #1a5c38; }
+    .btn-excel.disabled { background: #ccc; cursor: not-allowed; }
+
+    .alert {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: #856404;
+      margin-top: 12px;
+    }
+    .alert.danger { background: #f8d7da; border-color: #f5c2c7; color: #842029; }
+
+    /* MULTI-SELECT */
+    .ms-wrap { position: relative; }
+    .ms-trigger {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+      text-align: left;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #222;
+      transition: border-color 0.2s;
+    }
+    .ms-trigger:hover, .ms-trigger.open { border-color: #e07b39; }
+    .ms-trigger .arrow { color: #aaa; font-size: 11px; }
+    .ms-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0; right: 0;
+      background: white;
+      border: 1.5px solid #e07b39;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      z-index: 200;
+      max-height: 260px;
+      overflow: hidden;
+      flex-direction: column;
+    }
+    .ms-dropdown.open { display: flex; }
+    .ms-search {
+      padding: 8px 10px;
+      border: none;
+      border-bottom: 1px solid #eee;
+      font-size: 13px;
+      outline: none;
+      width: 100%;
+    }
+    .ms-list {
+      overflow-y: auto;
+      flex: 1;
+    }
+    .ms-item {
+      padding: 8px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.1s;
+    }
+    .ms-item:hover { background: #fff8f5; }
+    .ms-item input[type=checkbox] { accent-color: #e07b39; width: 14px; height: 14px; flex-shrink: 0; }
+    .ms-item.empty { color: #aaa; cursor: default; font-style: italic; }
+    .ms-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 7px;
+      min-height: 0;
+    }
+    .tag {
+      background: #e07b39;
+      color: white;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .tag.blue { background: #4a90d9; }
+    .tag .remove { cursor: pointer; font-weight: bold; opacity: 0.8; }
+    .tag .remove:hover { opacity: 1; }
+
+    /* CARROCERÍAS */
+    .body-types-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .body-type-chip {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 8px 6px;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 11px;
+      text-align: center;
+      transition: all 0.15s;
+      background: white;
+      color: #555;
+      user-select: none;
+    }
+    .body-type-chip:hover { border-color: #e07b39; color: #e07b39; }
+    .body-type-chip.selected { border-color: #e07b39; background: #fff3eb; color: #e07b39; font-weight: 600; }
+    .body-type-chip .bt-icon { font-size: 20px; }
+    .body-type-chip.blue-chip:hover { border-color: #4a90d9; color: #4a90d9; }
+    .body-type-chip.blue-chip.selected { border-color: #4a90d9; background: #e8f0fe; color: #4a90d9; }
+
+    /* SCRAPING PUNTUAL */
+    .manual-section {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      border-left: 4px solid #4a90d9;
+    }
+    .manual-section h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .manual-section .info-banner {
+      background: #e8f0fe;
+      border: 1px solid #b3cdf8;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #1a56a4;
+      margin-bottom: 20px;
+    }
+    .manual-verticales { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+    .manual-vertical-card {
+      background: #f5f8ff;
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .manual-vertical-card:hover { border-color: #4a90d9; }
+    .manual-vertical-card.active { border-color: #4a90d9; background: #e8f0fe; }
+    .manual-vertical-card .icon { font-size: 26px; margin-bottom: 6px; }
+    .manual-vertical-card h3 { font-size: 13px; font-weight: 600; }
+    .manual-vertical-card .channel-badge { background: #eee; color: #555; }
+    .manual-vertical-card.active .channel-badge { background: #4a90d9; color: white; }
+    .btn-run-now {
+      background: #4a90d9;
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+      margin-top: 16px;
+    }
+    .btn-run-now:hover { background: #3276c3; }
+    .btn-run-now:disabled { background: #aaa; cursor: not-allowed; }
+
+    footer { text-align: center; padding: 24px; font-size: 12px; color: #aaa; }
+
+    /* PERFILES */
+    .profile-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border: 1.5px solid #eee;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      gap: 12px;
+    }
+    .profile-row:hover { border-color: #e07b39; background: #fff8f5; }
+    .profile-name { font-size: 14px; font-weight: 600; flex: 1; }
+    .profile-date { font-size: 11px; color: #aaa; }
+    .profile-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .btn-profile {
+      padding: 6px 14px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-load  { background: #4a90d9; color: white; }
+    .btn-load:hover { background: #3276c3; }
+    .btn-delete { background: #f8d7da; color: #842029; }
+    .btn-delete:hover { background: #f5c6cb; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🚗 Auto1 Scraper — Panel de Control</h1>
+  <span class="badge safe" id="mode-badge">🔵 MODO SIMULACIÓN</span>
+</div>
+
+<div class="container">
+
+  <!-- STATUS -->
+  <div class="status-bar">
+    <div class="status-dot"></div>
+    <div class="status-text">
+      <strong>Estado:</strong> Listo para configurar ·
+      <strong>Último scraping:</strong> <span id="last-run">Nunca</span> ·
+      <strong>Coches en BBDD:</strong> <span id="total-cars">0</span>
+    </div>
+  </div>
+
+  <!-- EXCEL -->
+  <div class="excel-card">
+    <div class="excel-icon">📊</div>
+    <div class="excel-info">
+      <h3>Resultados del último scraping</h3>
+      <p id="excel-status">Ejecuta el scraper para ver los resultados.</p>
+      <div class="file-path" id="excel-path">Google Sheets — Auto1 Scraper — Oportunidades</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn-excel" id="btn-open-excel" onclick="openExcel()">
+        🔗 Abrir Google Sheets
+      </button>
+      <a href="/resultados.html" target="_blank" class="btn-excel" style="text-align:center;text-decoration:none;background:#6c63ff;">
+        🃏 Ver cards visuales
+      </a>
+    </div>
+  </div>
+
+  <!-- LOGIN -->
+  <div class="section" id="login-section">
+    <h2>🔐 Sesión de Auto1</h2>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:20px">
+      <div>
+        <p id="login-status-text" style="font-size:14px; color:#666;">
+          Estado: <strong id="cookie-status">Comprobando...</strong>
+        </p>
+        <p style="font-size:12px; color:#aaa; margin-top:4px;">
+          Se abrirá una ventana de Chromium. Haz login y se cerrará sola.
+        </p>
+      </div>
+      <button class="btn btn-primary" style="flex-shrink:0; width:200px" onclick="doLogin()">
+        🔑 Iniciar sesión en Auto1
+      </button>
+    </div>
+  </div>
+
+  <!-- VERTICALES -->
+  <div class="section">
+    <h2>🎯 Vertical a escrapear</h2>
+    <div class="verticales">
+      <div class="vertical-card active" onclick="selectVertical('24h', this)">
+        <div class="icon">🏷️</div>
+        <h3>Subasta 24H</h3>
+        <p>Subastas de 24 horas</p>
+        <span class="channel-badge">channel=24h</span>
+      </div>
+      <div class="vertical-card" onclick="selectVertical('ip', this)">
+        <div class="icon">⚡</div>
+        <h3>Compra Ahora</h3>
+        <p>Precio fijo inmediato</p>
+        <span class="channel-badge">channel=ip</span>
+      </div>
+      <div class="vertical-card blocked">
+        <span class="blocked-label">🔒 BLOQUEADO</span>
+        <div class="icon">🏆</div>
+        <h3>Subastas de Profesional</h3>
+        <p>Pujas vinculantes entre dealers</p>
+        <span class="channel-badge">channel=batch</span>
+      </div>
+    </div>
+    <div class="alert danger" style="display:none" id="batch-warning">
+      ❌ "Subastas de Profesional" está bloqueado permanentemente. Contiene pujas vinculantes que podrían generar compras accidentales.
+    </div>
+  </div>
+
+  <!-- FILTROS -->
+  <div class="section">
+    <h2>🔧 Filtros de búsqueda</h2>
+    <div class="filters-grid">
+
+      <div class="filter-group">
+        <label>Precio (€)</label>
+        <div class="range-row">
+          <input type="number" id="priceMin" value="2000" min="0" step="500" placeholder="Mín">
+          <span>→</span>
+          <input type="number" id="priceMax" value="15000" max="200000" step="500" placeholder="Máx">
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>Kilometraje (km)</label>
+        <div class="range-row">
+          <input type="number" id="mileageFrom" value="0" min="0" step="10000" placeholder="Mín">
+          <span>→</span>
+          <input type="number" id="mileageTo" value="150000" step="10000" placeholder="Máx">
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>1ª Matriculación (año)</label>
+        <div class="range-row">
+          <input type="number" id="regFrom" value="2016" min="1990" max="2026" placeholder="Desde">
+          <span>→</span>
+          <input type="number" id="regTo" value="2026" min="1990" max="2026" placeholder="Hasta">
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>País</label>
+        <select id="countries">
+          <option value="ES" selected>🇪🇸 Solo España</option>
+          <option value="ES,PT">🇪🇸🇵🇹 España + Portugal</option>
+          <option value="ES,FR,PT">🇪🇸🇫🇷🇵🇹 España + Francia + Portugal</option>
+          <option value="ALL">🌍 Toda Europa</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Sin daños en motor</label>
+        <select id="testDriveFindings">
+          <option value="none" selected>✅ Sin hallazgos específicos</option>
+          <option value="all">Todos (con y sin daños)</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Sin accidentes</label>
+        <select id="accidents">
+          <option value="false" selected>✅ Sin accidentes</option>
+          <option value="true">Todos</option>
+        </select>
+      </div>
+
+      <!-- MARCA -->
+      <div class="filter-group">
+        <label>Marca (opcional)</label>
+        <div class="ms-wrap" id="make-wrap">
+          <button type="button" class="ms-trigger" onclick="toggleMs('make')">
+            <span id="make-label">Todas las marcas</span>
+            <span class="arrow">▼</span>
+          </button>
+          <div class="ms-dropdown" id="make-dropdown">
+            <input class="ms-search" placeholder="Buscar marca..." oninput="filterMs('make', this.value)">
+            <div class="ms-list" id="make-list"></div>
+          </div>
+        </div>
+        <div class="ms-tags" id="make-tags"></div>
+      </div>
+
+      <!-- MODELO -->
+      <div class="filter-group">
+        <label>Modelo (opcional)</label>
+        <div class="ms-wrap" id="model-wrap">
+          <button type="button" class="ms-trigger" onclick="toggleMs('model')">
+            <span id="model-label">Todos los modelos</span>
+            <span class="arrow">▼</span>
+          </button>
+          <div class="ms-dropdown" id="model-dropdown">
+            <input class="ms-search" placeholder="Buscar modelo..." oninput="filterMs('model', this.value)">
+            <div class="ms-list" id="model-list"></div>
+          </div>
+        </div>
+        <div class="ms-tags" id="model-tags"></div>
+      </div>
+
+      <!-- CARROCERÍA -->
+      <div class="filter-group" style="grid-column: span 2">
+        <label>Carrocería (opcional — sin selección = todas)</label>
+        <div class="body-types-grid" id="body-types-grid"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- FECHAS SUBIDA -->
+  <div class="section">
+    <h2>📅 Fecha de subida a Auto1</h2>
+    <div class="dates-grid">
+      <div class="filter-group">
+        <label>Subidos desde</label>
+        <input type="date" id="uploadedFrom">
+      </div>
+      <div class="filter-group">
+        <label>Subidos hasta</label>
+        <input type="date" id="uploadedTo">
+      </div>
+    </div>
+    <div class="alert" style="margin-top: 12px">
+      💡 Deja en blanco para traer todos los disponibles hoy (recomendado para scraping diario).
+    </div>
+  </div>
+
+  <!-- SEGURIDAD -->
+  <div class="section">
+    <h2>🛡️ Seguridad</h2>
+    <div class="security-grid">
+      <div class="security-item">
+        <div class="value" id="max-cars-display">6</div>
+        <label>Coches máximo</label>
+        <input type="range" id="maxCars" min="1" max="100" value="6"
+               oninput="document.getElementById('max-cars-display').textContent = this.value"
+               style="width:100%; margin-top:8px">
+      </div>
+      <div class="security-item">
+        <div class="value" id="delay-display">3s</div>
+        <label>Delay entre requests</label>
+        <input type="range" id="delay" min="2" max="10" value="3"
+               oninput="document.getElementById('delay-display').textContent = this.value + 's'"
+               style="width:100%; margin-top:8px">
+      </div>
+      <div class="security-item">
+        <div class="value">🔒</div>
+        <label>Subastas de Profesional</label>
+        <div style="font-size:11px; color:#e63946; margin-top:6px; font-weight:600">SIEMPRE BLOQUEADO</div>
+      </div>
+    </div>
+
+    <div class="dry-run-toggle">
+      <div class="info">
+        <strong>🔵 Modo Simulación (DRY_RUN)</strong>
+        <p>Activado = solo muestra qué haría, sin llamar a ninguna API real. Desactívalo cuando estés seguro.</p>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="dryRun" checked onchange="updateDryRunUI()">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- HORARIO -->
+  <div class="section">
+    <h2>⏰ Horario automático</h2>
+    <div class="schedule-grid">
+      <div class="filter-group">
+        <label>Primer scraping del día</label>
+        <input type="time" id="schedule1" value="08:00">
+        <label style="margin-top:10px;">Perfil para cron 1</label>
+        <select id="profile1" style="width:100%;padding:10px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;" onchange="saveCronProfile(1)">
+          <option value="">Sin perfil</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Segundo scraping del día</label>
+        <input type="time" id="schedule2" value="14:00">
+        <label style="margin-top:10px;">Perfil para cron 2</label>
+        <select id="profile2" style="width:100%;padding:10px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;" onchange="saveCronProfile(2)">
+          <option value="">Sin perfil</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- PERFILES GUARDADOS -->
+  <div class="section" id="profiles-section">
+    <h2>💾 Perfiles guardados</h2>
+    <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:20px;">
+      <div class="filter-group" style="flex:1;margin:0">
+        <label>Nombre del perfil</label>
+        <input type="text" id="profile-name-input" placeholder="Ej: Berlinas España baratas" style="width:100%;padding:10px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;">
+      </div>
+      <button onclick="saveCurrentProfile()" style="padding:10px 20px;background:#e07b39;color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;height:42px;">
+        💾 Guardar perfil actual
+      </button>
+    </div>
+    <div id="profiles-list">
+      <p style="color:#aaa;font-size:13px;font-style:italic;">No hay perfiles guardados aún.</p>
+    </div>
+  </div>
+
+  <!-- ACCIONES -->
+  <div class="actions">
+    <button class="btn btn-secondary" onclick="loadConfig()">↩️ Resetear</button>
+    <button class="btn btn-primary" onclick="saveConfig()">💾 Guardar configuración</button>
+    <button class="btn btn-run" id="run-btn" onclick="runScraper()">▶️ Ejecutar ahora</button>
+  </div>
+
+  <div id="save-message" style="display:none; text-align:center; padding:12px; color:#2a9d8f; font-weight:600; margin-top:12px">
+    ✅ Configuración guardada correctamente
+  </div>
+
+  <!-- LOG EN TIEMPO REAL -->
+  <div id="log-panel" style="display:none; margin-top:20px;">
+    <div class="section">
+      <h2 id="log-title">⏳ Ejecutando scraper...</h2>
+      <div id="log-output" style="
+        background:#1a1a2e; color:#a8ff78; font-family:monospace;
+        font-size:12px; padding:16px; border-radius:8px;
+        max-height:300px; overflow-y:auto; line-height:1.8;
+        white-space:pre-wrap; margin-top:12px;
+      ">Iniciando...</div>
+    </div>
+  </div>
+
+  <!-- SCRAPING PUNTUAL -->
+  <div class="manual-section" style="margin-top:28px;">
+    <h2>⚡ Scraping puntual</h2>
+    <div class="info-banner">
+      🔒 Esta sección lanza un scraping inmediato con su propia configuración. <strong>No modifica la configuración de los crons automáticos.</strong>
+    </div>
+
+    <!-- Canal -->
+    <div class="manual-verticales">
+      <div class="manual-vertical-card active" onclick="selectManualVertical('24h', this)">
+        <div class="icon">🏷️</div>
+        <h3>Subasta 24H</h3>
+        <span class="channel-badge" style="display:inline-block; margin-top:6px; font-size:10px; padding:2px 8px; border-radius:20px; font-family:monospace;">channel=24h</span>
+      </div>
+      <div class="manual-vertical-card" onclick="selectManualVertical('ip', this)">
+        <div class="icon">⚡</div>
+        <h3>Compra Ahora</h3>
+        <span class="channel-badge" style="display:inline-block; margin-top:6px; font-size:10px; padding:2px 8px; border-radius:20px; font-family:monospace;">channel=ip</span>
+      </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="filters-grid">
+      <div class="filter-group">
+        <label>Precio (€)</label>
+        <div class="range-row">
+          <input type="number" id="m-priceMin" value="2000" min="0" step="500" placeholder="Mín">
+          <span>→</span>
+          <input type="number" id="m-priceMax" value="9000" step="500" placeholder="Máx">
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>Kilometraje (km)</label>
+        <div class="range-row">
+          <input type="number" id="m-mileageFrom" value="0" min="0" step="10000" placeholder="Mín">
+          <span>→</span>
+          <input type="number" id="m-mileageTo" value="130000" step="10000" placeholder="Máx">
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>1ª Matriculación (año)</label>
+        <div class="range-row">
+          <input type="number" id="m-regFrom" value="2016" min="1990" max="2026" placeholder="Desde">
+          <span>→</span>
+          <input type="number" id="m-regTo" value="2026" min="1990" max="2026" placeholder="Hasta">
+        </div>
+      </div>
+
+      <div class="filter-group">
+        <label>País</label>
+        <select id="m-countries">
+          <option value="ES" selected>🇪🇸 Solo España</option>
+          <option value="ES,PT">🇪🇸🇵🇹 España + Portugal</option>
+          <option value="ES,FR,PT">🇪🇸🇫🇷🇵🇹 España + Francia + Portugal</option>
+          <option value="ALL">🌍 Toda Europa</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Sin daños en motor</label>
+        <select id="m-testDriveFindings">
+          <option value="none" selected>✅ Sin hallazgos específicos</option>
+          <option value="all">Todos (con y sin daños)</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label>Sin accidentes</label>
+        <select id="m-accidents">
+          <option value="false" selected>✅ Sin accidentes</option>
+          <option value="true">Todos</option>
+        </select>
+      </div>
+
+      <!-- MARCA PUNTUAL -->
+      <div class="filter-group">
+        <label>Marca (opcional)</label>
+        <div class="ms-wrap" id="m-make-wrap">
+          <button type="button" class="ms-trigger" onclick="toggleMs('m-make')">
+            <span id="m-make-label">Todas las marcas</span>
+            <span class="arrow">▼</span>
+          </button>
+          <div class="ms-dropdown" id="m-make-dropdown">
+            <input class="ms-search" placeholder="Buscar marca..." oninput="filterMs('m-make', this.value)">
+            <div class="ms-list" id="m-make-list"></div>
+          </div>
+        </div>
+        <div class="ms-tags" id="m-make-tags"></div>
+      </div>
+
+      <!-- MODELO PUNTUAL -->
+      <div class="filter-group">
+        <label>Modelo (opcional)</label>
+        <div class="ms-wrap" id="m-model-wrap">
+          <button type="button" class="ms-trigger" onclick="toggleMs('m-model')">
+            <span id="m-model-label">Todos los modelos</span>
+            <span class="arrow">▼</span>
+          </button>
+          <div class="ms-dropdown" id="m-model-dropdown">
+            <input class="ms-search" placeholder="Buscar modelo..." oninput="filterMs('m-model', this.value)">
+            <div class="ms-list" id="m-model-list"></div>
+          </div>
+        </div>
+        <div class="ms-tags" id="m-model-tags"></div>
+      </div>
+
+      <!-- CARROCERÍA PUNTUAL -->
+      <div class="filter-group" style="grid-column: span 2">
+        <label>Carrocería (opcional)</label>
+        <div class="body-types-grid" id="m-body-types-grid"></div>
+      </div>
+
+    </div>
+
+    <!-- Seguridad puntual -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:20px;">
+      <div class="security-item">
+        <div class="value" id="m-max-cars-display">100</div>
+        <label>Coches máximo</label>
+        <input type="range" id="m-maxCars" min="1" max="100" value="100"
+               oninput="document.getElementById('m-max-cars-display').textContent = this.value"
+               style="width:100%; margin-top:8px">
+      </div>
+      <div class="security-item">
+        <div class="value" id="m-delay-display">3s</div>
+        <label>Delay entre requests</label>
+        <input type="range" id="m-delay" min="2" max="10" value="3"
+               oninput="document.getElementById('m-delay-display').textContent = this.value + 's'"
+               style="width:100%; margin-top:8px">
+      </div>
+    </div>
+
+    <div class="dry-run-toggle" style="margin-top:16px;">
+      <div class="info">
+        <strong>🔵 Modo Simulación (DRY_RUN)</strong>
+        <p>Activado = solo muestra qué haría, sin llamar a ninguna API real.</p>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="m-dryRun" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <!-- Presets scraping puntual -->
+    <div style="margin-top:20px; background:#f8f8f8; border:1.5px solid #eee; border-radius:10px; padding:16px;">
+      <div style="font-size:13px; font-weight:700; color:#555; margin-bottom:12px;">💾 Presets de scraping puntual</div>
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <input type="text" id="preset-name-input" placeholder="Nombre del preset (ej: Furgonetas baratas)"
+               style="flex:1; padding:8px 12px; border:1.5px solid #ddd; border-radius:8px; font-size:13px;">
+        <button onclick="saveManualPreset()"
+                style="padding:8px 16px; background:#e07b39; color:white; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;">
+          💾 Guardar
+        </button>
+      </div>
+      <div id="manual-presets-list" style="display:flex; flex-direction:column; gap:6px;">
+        <p style="color:#aaa; font-size:12px; font-style:italic; margin:0;">No hay presets guardados aún.</p>
+      </div>
+    </div>
+
+    <button class="btn-run-now" id="run-now-btn" onclick="runScraperNow()">
+      ⚡ Lanzar scraping ahora
+    </button>
+  </div>
+
+</div>
+
+<footer>Auto1 Scraper · Solo lectura · Máx 6 coches · canal=batch bloqueado permanentemente</footer>
+
+<script>
+  // ── DATOS AUTO1 ────────────────────────────────────────
+  const AUTO1_MAKES = {
+    "Abarth": ["500", "595", "595C", "695", "Stilo"],
+    "Aiways": ["U5"],
+    "Aixam": ["City Emotion"],
+    "Alfa Romeo": ["Alfa 146", "Alfa 147", "Alfa 156", "Alfa 159", "Alfa 166", "Alfa Brera", "Alfa GT", "Alfa GTV", "Alfa Spider", "Giulia", "Giulietta", "Junior", "MiTo", "Stelvio", "Tonale"],
+    "Alpine": ["A110"],
+    "Audi": ["100", "80", "90", "A1", "A1 Sportback", "A1 allstreet", "A2", "A3", "A3 Limousine", "A3 Sportback", "A4", "A4 Allroad", "A5", "A5 Sportback", "A6", "A6 Allroad", "A7", "A7 Sportback", "A8", "Allroad", "Cabriolet", "Q2", "Q3", "Q3 Sportback", "Q4", "Q5", "Q5 Sportback", "Q7", "Q8", "RS 3", "RS 3 Sportback", "RS 4", "RS 5", "RS 6", "RS Q3", "RS Q3 Sportback", "RS Q8", "S1 Sportback", "S3", "S3 Sportback", "S4", "S5", "S5 Sportback", "S6", "S7 Sportback", "S8", "SQ2", "SQ5", "SQ5 Sportback", "SQ7", "SQ8", "TT", "TTS", "e-tron", "e-tron GT", "e-tron Sportback"],
+    "BAIC": ["BS4", "U-Tour"],
+    "BMW": ["1er", "2er", "3er", "4er", "5er", "6er", "7er", "8er", "X1", "X2", "X3", "X4", "X5", "X6", "X7", "Z3", "Z4", "i3", "i4", "i8", "iX", "iX1", "iX2", "iX3"],
+    "BYD": ["Atto 3", "Dolphin", "Dolphin Surf", "Seal"],
+    "Borgward": ["BX7"],
+    "Cadillac": ["ATS", "SRX", "XT5"],
+    "Caterham": ["7"],
+    "Chevrolet": ["Alero", "Aveo", "Blazer", "Camaro", "Captiva", "Cruze", "Epica", "HHR", "Kalos", "Lacetti", "Malibu", "Matiz", "Nubira", "Orlando", "Spark", "Trax", "Volt"],
+    "Chrysler": ["300 C", "300 M", "Crossfire", "Grand Voyager", "PT Cruiser", "Sebring", "Stratus", "Voyager"],
+    "Citroën": ["Ami", "Berlingo", "C-Crosser", "C-Elysée", "C-Zero", "C1", "C2", "C3", "C3 Aircross", "C3 Picasso", "C3 Pluriel", "C4", "C4 Aircross", "C4 Cactus", "C4 Grand Picasso", "C4 Grand Spacetourer", "C4 Picasso", "C4 Spacetourer", "C4 X", "C5", "C5 Aircross", "C5 Cross Tourer", "C5 X", "C6", "C8", "DS3", "DS3 Cabrio", "DS4", "DS5", "Jumper", "Jumpy", "Nemo", "Saxo", "Spacetourer", "XM", "Xantia", "Xsara", "Xsara Picasso", "ZX"],
+    "Cupra": ["Ateca", "Born", "Formentor", "Leon", "Leon Sportstourer", "Terramar"],
+    "DFSK": ["Life"],
+    "DS": ["DS3", "DS3 Crossback", "DS4", "DS4 Crossback", "DS5", "DS7", "DS7 Crossback", "DS9"],
+    "Dacia": ["Bigster", "Dokker", "Dokker Express", "Duster", "Jogger", "Lodgy", "Logan", "Logan Express", "Logan MCV", "Sandero", "Spring"],
+    "Daewoo": ["Kalos", "Lanos", "Matiz", "Nubira", "Tacuma"],
+    "Daihatsu": ["Charade", "Cuore", "Materia", "Sirion", "Terios", "Trevis", "YRV"],
+    "Dodge": ["Caliber", "Journey", "Nitro", "Ram 1500"],
+    "Dongfeng": ["D5"],
+    "Fengon": ["E5", "F5", "Glory 500", "Glory 580", "Glory IX5", "Seres 3"],
+    "Fiat": ["124 Spider", "500", "500C", "500L", "500X", "500e", "500e Cabrio", "600", "Barchetta", "Brava", "Bravo", "Doblo", "Ducato", "Fiorino", "Freemont", "Fullback", "Grande Punto", "Idea", "Linea", "Marea", "Palio", "Panda", "Pandina", "Punto", "Punto Evo", "Qubo", "Scudo", "Sedici", "Seicento", "Stilo", "Talento", "Tipo", "Ulysse"],
+    "Fisker": ["Ocean"],
+    "Ford": ["B-Max", "C-Max", "Cougar", "EcoSport", "Edge", "Escort", "Explorer", "Fiesta", "Focus", "Fusion", "Galaxy", "Grand C-Max", "Grand Tourneo Connect", "Ka", "Ka+", "Kuga", "Maverick", "Mondeo", "Mustang", "Mustang Mach-E", "Puma", "Ranger", "Ranger Raptor", "S-Max", "Scorpio", "StreetKa", "Tourneo", "Tourneo Connect", "Tourneo Courier", "Tourneo Custom", "Transit", "Transit Connect", "Transit Courier", "Transit Custom", "Windstar"],
+    "Great Wall": ["Hover H6", "Voleex C20R", "Wey 05"],
+    "Honda": ["Accord", "CR-V", "CR-Z", "CRX", "Civic", "FR-V", "HR-V", "Insight", "Jazz", "Logo"],
+    "Hyundai": ["Accent", "Atos", "Bayon", "Coupe", "Elantra", "Genesis", "Getz", "Grand Santa Fe", "H1", "H350 Kasten", "IONIQ", "IONIQ 5", "IONIQ 6", "Kona", "Lantra", "Matrix", "Santa Fe", "Sonata", "Staria", "Terracan", "Tucson", "Veloster", "i10", "i20", "i20 Active", "i30", "i30 Fastback", "i40", "ix20", "ix35", "ix55"],
+    "Infiniti": ["EX", "FX", "M-Serie", "Q30", "Q50", "QX30", "QX50", "QX70"],
+    "Isuzu": ["D-MAX"],
+    "Iveco": ["Daily"],
+    "Jaguar": ["Daimler", "E-Pace", "F-Pace", "F-TYPE", "I-Pace", "S-TYPE", "X-TYPE", "XE", "XF", "XJ", "XJ Serie III", "XJS", "XK", "XKR"],
+    "Jeep": ["Avenger", "Cherokee", "Commander", "Compass", "Gladiator", "Grand Cherokee", "Patriot", "Renegade", "Wrangler", "Wrangler Unlimited"],
+    "Kia": ["Carens", "Carnival", "Cerato", "EV6", "EV9", "Magentis", "Niro", "Opirus", "Optima", "Picanto", "Rio", "Sephia", "Shuma", "Sorento", "Soul", "Sportage", "Stinger", "Stonic", "Venga", "XCeed", "cee'd", "pro_cee'd"],
+    "Lada": ["Kalina 2", "Niva", "Taiga"],
+    "Lancia": ["Delta", "Flavia", "Lancia Y", "Musa", "Phedra", "Thema", "Thesis", "Voyager", "Ypsilon"],
+    "Land Rover": ["Defender", "Discovery", "Discovery 4", "Discovery 5", "Discovery Sport", "Evoque", "Evoque Cabriolet", "Freelander", "Range Rover", "Range Rover Sport", "Range Rover Velar"],
+    "Leapmotor": ["T03"],
+    "Lexus": ["CT-Serie", "ES-Serie", "GS-Serie", "IS-Serie", "LS-Serie", "NX-Serie", "RC-Serie", "RX-Serie", "UX-Serie"],
+    "Lotus": ["4", "5", "7"],
+    "Lynk & Co": ["01", "3", "3.0", "4.0", "5", "5.0", "6.0", "F35", "Zero"],
+    "MG": ["3", "4", "EHS", "HS", "ZS"],
+    "MINI": ["Cabrio", "Clubman", "Clubvan", "Countryman", "Coupe", "MINI", "Paceman", "Roadster"],
+    "Mahindra": ["KUV 100", "XUV 500"],
+    "Maserati": ["4200 Spyder", "Ghibli", "Grecale", "Levante", "Quattroporte"],
+    "Maxus": ["Deliver 3", "Deliver 9", "T90"],
+    "Mazda": ["2", "3", "323", "5", "6", "6 FastWagon", "CX-3", "CX-30", "CX-5", "CX-60", "CX-7", "CX-80", "CX-9", "Demio", "MX-30", "MX-5", "Premacy", "Tribute"],
+    "Mercedes-Benz": ["123", "190/190 E", "A-Klasse", "A-Klasse Limousine", "AMG GT 4-door", "B-Klasse", "C-Klasse", "C-Klasse All-Terrain", "CL-Coupe", "CLA-Klasse", "CLC-Klasse", "CLE-Klasse", "CLK-Klasse", "CLS-Klasse", "Citan", "E-Klasse", "E-Klasse All-Terrain", "EQA", "EQB", "EQC", "EQE", "EQS", "G-Klasse", "GL-Klasse", "GLA-Klasse", "GLB-Klasse", "GLC-Klasse", "GLE-Klasse", "GLK-Klasse", "GLS-Klasse", "M-Klasse", "R-Klasse", "S-Klasse", "SL-Klasse", "SLC-Klasse", "SLK-Klasse", "Sprinter", "T-Klasse", "V-Klasse", "V-Klasse Marco Polo", "Vaneo", "Viano", "Vito", "Vito Tourer", "X-Klasse"],
+    "Mitsubishi": ["ASX", "Attrage", "Carisma", "Colt", "Eclipse Cross", "Grandis", "L 200", "Lancer", "Outlander", "Pajero", "Space", "Space Star", "i-MiEV"],
+    "Nissan": ["370 Z", "Almera", "Almera Tino", "Ariya", "Cube", "Interstar", "Juke", "Leaf", "Maxima", "Micra", "Murano", "NP300 Pick-up", "NV200", "NV200 Evalia", "NV250", "NV300", "NV400", "Navara NP-300", "Navara Pick-up", "Note", "Pathfinder", "Patrol", "Pick-up", "Pixo", "Primastar", "Primera", "Pulsar", "Qashqai", "Qashqai+2", "Sunny", "Terrano", "Tiida", "Townstar", "X-Trail"],
+    "ORA": ["Funky Cat"],
+    "Opel": ["Adam", "Agila", "Ampera", "Antara", "Astra", "Astra GTC", "Cascada", "Combo", "Combo Life", "Corsa", "Crossland X", "Frontera", "GT", "Grandland X", "Insignia", "Insignia Country Tourer", "Insignia Grand Sport", "Insignia Sports Tourer", "Karl", "Meriva", "Mokka", "Mokka X", "Monza", "Movano", "Omega", "Signum", "Tigra", "Vectra", "Vivaro", "Zafira", "Zafira Life", "Zafira Tourer"],
+    "Peugeot": ["1007", "106", "107", "108", "2008", "205", "206", "206+", "207", "208", "3008", "306", "307", "308", "309", "4007", "4008", "405", "406", "407", "408", "5008", "508", "607", "806", "807", "Bipper", "Boxer", "Expert", "Partner", "RCZ", "Rifter", "Traveller", "iOn"],
+    "Polestar": ["2", "4"],
+    "Pontiac": ["Firebird"],
+    "Porsche": ["718 Boxster", "718 Cayman", "911", "924", "928", "Boxster", "Cayenne", "Cayman", "Macan", "Panamera", "Panamera Sport Turismo", "Taycan"],
+    "Renault": ["21", "5", "Alaskan", "Arkana", "Austral", "Captur", "Clio", "Espace", "Express", "Fluence", "Grand Espace", "Grand Modus", "Grand Scenic", "Kadjar", "Kangoo", "Koleos", "Laguna", "Latitude", "Master", "Megane", "Modus", "Safrane", "Scenic", "Talisman", "Trafic", "Twingo", "Twizy", "Vel Satis", "Wind", "Zoe"],
+    "Rover": ["200", "400", "45", "75", "MG TF"],
+    "Saab": ["9-3", "9-5", "900", "9000"],
+    "Seat": ["Alhambra", "Altea", "Altea XL", "Arona", "Arosa", "Ateca", "Cordoba", "Exeo", "Ibiza", "Leon", "Mii", "Tarraco", "Toldeo", "Toledo"],
+    "Skoda": ["Citigo", "Enyaq", "Fabia", "Felicia", "Kamiq", "Karoq", "Kodiaq", "Octavia", "Rapid", "Rapid Spaceback", "Roomster", "Scala", "Superb", "Yeti"],
+    "Smart": ["#1", "Roadster", "forfour", "fortwo"],
+    "Ssangyong": ["Actyon", "Korando", "Kyron", "Musso", "Musso Grand", "Rexton", "Rodius", "Tivoli", "Tivoli Grand", "XLV"],
+    "Subaru": ["Forester", "Impreza", "Justy", "Legacy", "Levorg", "Outback", "Trezia", "Tribeca", "XV"],
+    "Suzuki": ["Alto", "Baleno", "Celerio", "Grand Vitara", "Ignis", "Jimny", "Kizashi", "Liana", "S-Cross", "SX4", "SX4 S-Cross", "Splash", "Swift", "Vitara", "Wagon"],
+    "Tata": ["Aria", "Indica", "Vista"],
+    "Tesla": ["Model 3", "Model S", "Model X", "Model Y"],
+    "Toyota": ["Auris", "Auris Touring Sports", "Avensis", "Avensis Verso", "Aygo", "Aygo X", "C-HR", "Camry", "Carina", "Celica", "Corolla", "Corolla Cross", "Corolla Verso", "Hilux", "Land Cruiser", "Mirai", "Previa", "Prius", "Prius+", "ProAce", "ProAce City", "ProAce City Verso", "ProAce Verso", "RAV 4", "Starlet", "Urban Cruiser", "Verso", "Verso-S", "Yaris", "Yaris Cross", "Yaris Verso", "bZ4X", "iQ"],
+    "Volkswagen": ["Amarok", "Arteon", "Arteon Shooting Brake", "Beetle", "Bora", "CC", "Caddy", "Crafter", "Eos", "Fox", "Golf II", "Golf III", "Golf IV", "Golf V", "Golf V Plus", "Golf VI", "Golf VI Plus", "Golf VII", "Golf VII Sportsvan", "Golf VIII", "ID.3", "ID.4", "ID.5", "ID.7 Tourer", "ID.Buzz", "Jetta", "LT", "Lupo", "New Beetle", "Passat", "Passat Alltrack", "Passat CC", "Phaeton", "Polo", "Scirocco", "Sharan", "T-Cross", "T-Roc", "T3", "T4 California", "T4 Caravelle", "T4 Kombi", "T4 Multivan", "T4 Transporter", "T5 California", "T5 Caravelle", "T5 Kombi", "T5 Multivan", "T5 Shuttle", "T5 Transporter", "T6 California", "T6 Caravelle", "T6 Kombi", "T6 Multivan", "T6 Transporter", "T7 Kombi", "T7 Multivan", "TGE", "Taigo", "Tayron", "Tiguan", "Tiguan Allspace", "Touareg", "Touran", "Vento", "e-Golf VII", "up!"],
+    "Volvo": ["C30", "C40", "C70", "EX30", "S40", "S60", "S60 Cross Country", "S70", "S80", "S90", "Serie 460", "Serie 740", "Serie 850", "V40", "V40 Cross Country", "V50", "V60", "V60 Cross Country", "V70", "V90", "V90 Cross Country", "XC40", "XC60", "XC70", "XC90"],
+  };
+
+  const BODY_TYPES = [
+    { key: 'limo',        label: 'Berlina',            icon: '🚗' },
+    { key: 'combi',       label: 'Familiar',           icon: '🚙' },
+    { key: 'smallCar',    label: 'Utilitario',         icon: '🏎️' },
+    { key: 'suv',         label: 'SUV',                icon: '🛻' },
+    { key: 'cabrio',      label: 'Cabrio',             icon: '🌞' },
+    { key: 'coupe',       label: 'Coupé',              icon: '🏁' },
+    { key: 'coupe/cabrio',label: 'Coupé-Cabrio',       icon: '🌬️' },
+    { key: 'roadster',    label: 'Roadster',           icon: '🏎️' },
+    { key: 'commercial',  label: 'Furgoneta Comercial',icon: '🚐' },
+    { key: 'van',         label: 'Monovolumen/Van',    icon: '🚌' },
+    { key: 'truck',       label: 'Pick-up/Camión',     icon: '🚛' },
+    { key: 'bus',         label: 'Minibús',            icon: '🚎' },
+    { key: 'other',       label: 'Otros',              icon: '🔧' },
+  ];
+
+  // ── ESTADO ─────────────────────────────────────────────
+  let selectedChannel = '24h';
+  let manualChannel = '24h';
+
+  // Selecciones por sección: 'main' y 'manual'
+  const state = {
+    main:   { makes: [], models: [], bodyTypes: [] },
+    manual: { makes: [], models: [], bodyTypes: [] },
+  };
+
+  // ── VERTICALES ─────────────────────────────────────────
+  function selectVertical(channel, el) {
+    if (channel === 'batch') return;
+    selectedChannel = channel;
+    document.querySelectorAll('.vertical-card:not(.blocked)').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  // ── MULTI-SELECT ───────────────────────────────────────
+  // ns = 'make' | 'model' | 'm-make' | 'm-model'
+  // section = 'main' | 'manual'
+
+  function nsToSection(ns) { return ns.startsWith('m-') ? 'manual' : 'main'; }
+  function nsToKey(ns)     { return ns.startsWith('m-') ? ns.slice(2) : ns; } // 'make' | 'model'
+
+  function toggleMs(ns) {
+    const dd = document.getElementById(ns + '-dropdown');
+    const isOpen = dd.classList.contains('open');
+    // Cerrar todos los dropdowns abiertos
+    document.querySelectorAll('.ms-dropdown.open').forEach(d => {
+      d.classList.remove('open');
+      d.previousElementSibling.classList.remove('open');
+    });
+    if (!isOpen) {
+      dd.classList.add('open');
+      dd.previousElementSibling.classList.add('open');
+      dd.querySelector('.ms-search').focus();
+      renderMsList(ns, '');
+    }
+  }
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.ms-wrap')) {
+      document.querySelectorAll('.ms-dropdown.open').forEach(d => {
+        d.classList.remove('open');
+        d.previousElementSibling.classList.remove('open');
+      });
+    }
+  });
+
+  function filterMs(ns, q) { renderMsList(ns, q); }
+
+  function renderMsList(ns, q) {
+    const section = nsToSection(ns);
+    const key     = nsToKey(ns);
+    const listEl  = document.getElementById(ns + '-list');
+    q = q.toLowerCase();
+
+    let items = [];
+    if (key === 'make') {
+      items = Object.keys(AUTO1_MAKES).sort();
+    } else {
+      // Solo modelos de las marcas seleccionadas (o todos si no hay marca)
+      const selMakes = state[section].makes;
+      const makesToShow = selMakes.length ? selMakes : Object.keys(AUTO1_MAKES);
+      const modelSet = new Set();
+      makesToShow.forEach(m => (AUTO1_MAKES[m] || []).forEach(md => modelSet.add(md)));
+      items = [...modelSet].sort();
+    }
+
+    if (q) items = items.filter(i => i.toLowerCase().includes(q));
+
+    const selKey = key === 'make' ? 'makes' : 'models';
+    const selected = state[section][selKey];
+
+    if (!items.length) {
+      listEl.innerHTML = '<div class="ms-item empty">Sin resultados</div>';
+      return;
+    }
+
+    listEl.innerHTML = items.map(item => {
+      const checked = selected.includes(item) ? 'checked' : '';
+      const safe = item.replace(/'/g, "\\'");
+      return `<label class="ms-item">
+        <input type="checkbox" ${checked} onchange="toggleMsItem('${ns}','${safe}',this.checked)">
+        ${item}
+      </label>`;
+    }).join('');
+  }
+
+  function toggleMsItem(ns, item, checked) {
+    const section = nsToSection(ns);
+    const key     = nsToKey(ns);
+    const selKey  = key === 'make' ? 'makes' : 'models';
+
+    if (checked) {
+      if (!state[section][selKey].includes(item)) state[section][selKey].push(item);
+    } else {
+      state[section][selKey] = state[section][selKey].filter(x => x !== item);
+    }
+
+    // Si cambia marca, resetear modelos y refrescar lista de modelos
+    if (key === 'make') {
+      const modelNs = section === 'manual' ? 'm-model' : 'model';
+      state[section].models = [];
+      renderMsTags(modelNs);
+      updateMsLabel(modelNs);
+    }
+
+    renderMsTags(ns);
+    updateMsLabel(ns);
+  }
+
+  function renderMsTags(ns) {
+    const section = nsToSection(ns);
+    const key     = nsToKey(ns);
+    const selKey  = key === 'make' ? 'makes' : 'models';
+    const color   = section === 'manual' ? ' blue' : '';
+    const tagsEl  = document.getElementById(ns + '-tags');
+    tagsEl.innerHTML = state[section][selKey].map(item =>
+      `<span class="tag${color}">${item} <span class="remove" onclick="toggleMsItem('${ns}','${item.replace(/'/g,"\\'")}',false)">×</span></span>`
+    ).join('');
+  }
+
+  function updateMsLabel(ns) {
+    const section = nsToSection(ns);
+    const key     = nsToKey(ns);
+    const selKey  = key === 'make' ? 'makes' : 'models';
+    const sel     = state[section][selKey];
+    const labelEl = document.getElementById(ns + '-label');
+    if (!sel.length) {
+      labelEl.textContent = key === 'make' ? 'Todas las marcas' : 'Todos los modelos';
+    } else if (sel.length === 1) {
+      labelEl.textContent = sel[0];
+    } else {
+      labelEl.textContent = sel.length + (key === 'make' ? ' marcas' : ' modelos');
+    }
+  }
+
+  // ── CARROCERÍAS ────────────────────────────────────────
+  function initBodyTypes(gridId, section) {
+    const grid = document.getElementById(gridId);
+    const blue = section === 'manual' ? ' blue-chip' : '';
+    grid.innerHTML = BODY_TYPES.map(bt =>
+      `<div class="body-type-chip${blue}" data-key="${bt.key}" data-section="${section}" onclick="toggleBodyType(this,'${bt.key}','${section}')">
+        <span class="bt-icon">${bt.icon}</span>
+        <span>${bt.label}</span>
+      </div>`
+    ).join('');
+  }
+
+  function toggleBodyType(el, key, section) {
+    const arr = state[section].bodyTypes;
+    const idx = arr.indexOf(key);
+    if (idx === -1) { arr.push(key); el.classList.add('selected'); }
+    else            { arr.splice(idx, 1); el.classList.remove('selected'); }
+  }
+
+  function setBodyTypes(section, keys) {
+    state[section].bodyTypes = [...keys];
+    const gridId = section === 'manual' ? 'm-body-types-grid' : 'body-types-grid';
+    document.querySelectorAll(`#${gridId} .body-type-chip`).forEach(chip => {
+      chip.classList.toggle('selected', keys.includes(chip.dataset.key));
+    });
+  }
+
+  // ── INIT COMPONENTES ────────────────────────────────────
+  initBodyTypes('body-types-grid', 'main');
+  initBodyTypes('m-body-types-grid', 'manual');
+  // Defaults del scraping puntual: siempre furgonetas
+  setBodyTypes('manual', ['commercial', 'van']);
+
+  function updateDryRunUI() {
+    const isDry = document.getElementById('dryRun').checked;
+    const badge = document.getElementById('mode-badge');
+    const btn = document.getElementById('run-btn');
+    if (isDry) {
+      badge.textContent = '🔵 MODO SIMULACIÓN';
+      badge.className = 'badge safe';
+      btn.textContent = '▶️ Simular ahora';
+    } else {
+      badge.textContent = '🟢 MODO REAL';
+      badge.className = 'badge';
+      badge.style.background = '#e07b39';
+      btn.textContent = '🚀 Ejecutar REAL';
+    }
+  }
+
+  function buildMakes(section) {
+    // Si hay modelos seleccionados, los agrupamos por marca
+    const selMakes  = state[section].makes;
+    const selModels = state[section].models;
+    if (!selMakes.length && !selModels.length) return [];
+    if (!selMakes.length) {
+      // Modelos sin filtro de marca — buscar a qué marca pertenece cada modelo
+      const makeMap = {};
+      selModels.forEach(md => {
+        Object.entries(AUTO1_MAKES).forEach(([mk, mds]) => {
+          if (mds.includes(md)) { makeMap[mk] = makeMap[mk] || []; makeMap[mk].push(md); }
+        });
+      });
+      return Object.entries(makeMap).map(([mk, mds]) => ({ make: mk, models: mds }));
+    }
+    return selMakes.map(mk => {
+      const mds = selModels.filter(md => (AUTO1_MAKES[mk] || []).includes(md));
+      return mds.length ? { make: mk, models: mds } : { make: mk };
+    });
+  }
+
+  function getConfig() {
+    const countries = document.getElementById('countries').value;
+    return {
+      filtros: {
+        channel: selectedChannel,
+        countries: countries === 'ALL' ? ['ES','FR','DE','PT','IT','NL','BE','PL'] : countries.split(','),
+        testDriveFindings: document.getElementById('testDriveFindings').value,
+        accidents: document.getElementById('accidents').value === 'false' ? false : true,
+        sort: 'relevanceSorting',
+        dir: 'asc',
+        mileageFrom: parseInt(document.getElementById('mileageFrom').value) || 0,
+        mileageTo: parseInt(document.getElementById('mileageTo').value) || 130000,
+        priceMin: parseInt(document.getElementById('priceMin').value) || 0,
+        priceMax: parseInt(document.getElementById('priceMax').value) || 9000,
+        regFrom: parseInt(document.getElementById('regFrom').value) || 2016,
+        regTo: parseInt(document.getElementById('regTo').value) || 2026,
+        makes: buildMakes('main'),
+        bodyTypes: state.main.bodyTypes,
+        uploadedFrom: document.getElementById('uploadedFrom').value || null,
+        uploadedTo: document.getElementById('uploadedTo').value || null,
+        pageSize: 6
+      },
+      seguridad: {
+        max_coches: parseInt(document.getElementById('maxCars').value),
+        dry_run: document.getElementById('dryRun').checked,
+        delay_entre_requests_segundos: parseInt(document.getElementById('delay').value)
+      },
+      schedule: {
+        hora_scraping_1: document.getElementById('schedule1').value,
+        hora_scraping_2: document.getElementById('schedule2').value
+      },
+      mercado: {
+        buscar_wallapop: true,
+        buscar_cochesnet: true,
+        min_anuncios_para_precio_fiable: 3
+      }
+    };
+  }
+
+  function saveConfig() {
+    const config = getConfig();
+    // Guardar en localStorage para la UI
+    localStorage.setItem('auto1_config', JSON.stringify(config));
+    // Guardar en archivo vía API local (si está corriendo el servidor)
+    fetch('/save-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config)
+    }).catch(() => {
+      // Si no hay servidor local, mostrar el JSON para copiar manualmente
+      console.log('Config:', JSON.stringify(config, null, 2));
+    });
+    const msg = document.getElementById('save-message');
+    msg.style.display = 'block';
+    setTimeout(() => msg.style.display = 'none', 3000);
+  }
+
+  function applyConfig(config) {
+    const f = config.filtros || {};
+    const s = config.seguridad || {};
+    const sch = config.schedule || {};
+    if (f.priceMin !== undefined) document.getElementById('priceMin').value = f.priceMin;
+    if (f.priceMax !== undefined) document.getElementById('priceMax').value = f.priceMax;
+    if (f.mileageFrom !== undefined) document.getElementById('mileageFrom').value = f.mileageFrom;
+    if (f.mileageTo !== undefined) document.getElementById('mileageTo').value = f.mileageTo;
+    if (f.regFrom !== undefined) document.getElementById('regFrom').value = f.regFrom;
+    if (f.regTo !== undefined) document.getElementById('regTo').value = f.regTo;
+    if (s.max_coches !== undefined) {
+      document.getElementById('maxCars').value = s.max_coches;
+      document.getElementById('max-cars-display').textContent = s.max_coches;
+    }
+    if (s.delay_entre_requests_segundos !== undefined) {
+      document.getElementById('delay').value = s.delay_entre_requests_segundos;
+      document.getElementById('delay-display').textContent = s.delay_entre_requests_segundos + 's';
+    }
+    if (s.dry_run !== undefined) document.getElementById('dryRun').checked = s.dry_run;
+    if (sch.hora_scraping_1) document.getElementById('schedule1').value = sch.hora_scraping_1;
+    if (sch.hora_scraping_2) document.getElementById('schedule2').value = sch.hora_scraping_2;
+    if (sch.profile_1 !== undefined) document.getElementById('profile1').value = sch.profile_1 || '';
+    if (sch.profile_2 !== undefined) document.getElementById('profile2').value = sch.profile_2 || '';
+
+    // Restaurar makes / models
+    if (f.makes && f.makes.length) {
+      state.main.makes  = f.makes.map(m => m.make);
+      state.main.models = f.makes.flatMap(m => m.models || []);
+    } else {
+      state.main.makes = [];
+      state.main.models = [];
+    }
+    renderMsTags('make'); updateMsLabel('make');
+    renderMsTags('model'); updateMsLabel('model');
+
+    // Restaurar bodyTypes
+    setBodyTypes('main', f.bodyTypes || []);
+
+    updateDryRunUI();
+  }
+
+  function loadConfig() {
+    // Leer siempre del servidor (config.json) — fuente de verdad
+    fetch('/load-config')
+      .then(r => r.json())
+      .then(config => { if (config && config.filtros) applyConfig(config); })
+      .catch(() => {
+        // Fallback a localStorage si no hay servidor
+        const saved = localStorage.getItem('auto1_config');
+        if (saved) applyConfig(JSON.parse(saved));
+      });
+  }
+
+  let logInterval = null;
+
+  function runScraper() {
+    const config = getConfig();
+    const isDry = config.seguridad.dry_run;
+    const confirmMsg = isDry
+      ? '▶️ Ejecutar en MODO SIMULACIÓN\n\nNo llamará a ninguna API real. ¿Continuar?'
+      : '🟢 Ejecutar en MODO REAL\n\nEsto llamará a la API de Auto1 (solo lectura).\nMáx coches: ' + config.seguridad.max_coches + '\n\n¿Continuar?';
+
+    if (!confirm(confirmMsg)) return;
+
+    // Mostrar panel de logs
+    document.getElementById('log-panel').style.display = 'block';
+    document.getElementById('log-output').textContent = '⏳ Iniciando...\n';
+    document.getElementById('log-title').textContent = isDry ? '⏳ Simulando scraper...' : '🚀 Ejecutando scraper...';
+    document.getElementById('run-btn').disabled = true;
+    document.getElementById('run-btn').textContent = '⏳ Ejecutando...';
+
+    // Scroll al log
+    document.getElementById('log-panel').scrollIntoView({ behavior: 'smooth' });
+
+    // Llamar al servidor para lanzar el scraper
+    fetch('/run-scraper', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) {
+        document.getElementById('log-output').textContent = '❌ Error: ' + data.error;
+        document.getElementById('run-btn').disabled = false;
+        return;
+      }
+      // Polling de logs cada segundo
+      logInterval = setInterval(pollLogs, 1000);
+    })
+    .catch(e => {
+      document.getElementById('log-output').textContent = '❌ No se pudo conectar con el servidor: ' + e;
+      document.getElementById('run-btn').disabled = false;
+    });
+  }
+
+  function pollLogs() {
+    fetch('/scraper-status')
+      .then(r => r.json())
+      .then(data => {
+        const el = document.getElementById('log-output');
+        el.textContent = data.log.join('\n');
+        el.scrollTop = el.scrollHeight; // Auto-scroll abajo
+
+        if (!data.running) {
+          clearInterval(logInterval);
+          document.getElementById('run-btn').disabled = false;
+          document.getElementById('run-btn').textContent = '▶️ Ejecutar ahora';
+          document.getElementById('log-title').textContent = '✅ Scraper completado';
+          checkExcel(); // Refrescar Excel por si hay uno nuevo
+        }
+      });
+  }
+
+  // ── EXCEL ──────────────────────────────────────────
+  const SHEETS_URL = 'https://docs.google.com/spreadsheets/d/1ugSu-uDVZYnVWyFrq02xYo8Fm14Ui9ZW-3z9YBwHxgY';
+
+  function checkExcel() {
+    fetch('/last-excel')
+      .then(r => r.json())
+      .then(data => {
+        if (data.file) {
+          document.getElementById('excel-status').textContent =
+            `Último volcado: ${data.date} · ${data.cars} coches aprox.`;
+        }
+      }).catch(() => {});
+  }
+
+  function openExcel() {
+    window.open(SHEETS_URL, '_blank');
+  }
+
+  // ── LOGIN ──────────────────────────────────────────
+  function checkCookies() {
+    fetch('/last-excel') // reutilizamos el servidor para saber si está vivo
+      .then(() => {
+        // Comprobar si existe cookies.json via endpoint
+        fetch('/cookie-status')
+          .then(r => r.json())
+          .then(d => {
+            const el = document.getElementById('cookie-status');
+            if (d.ok) {
+              el.textContent = '✅ Sesión activa';
+              el.style.color = '#2a9d8f';
+            } else {
+              el.textContent = '❌ Sin sesión — haz login primero';
+              el.style.color = '#e63946';
+            }
+          }).catch(() => {});
+      }).catch(() => {});
+  }
+
+  function doLogin() {
+    document.getElementById('log-panel').style.display = 'block';
+    document.getElementById('log-title').textContent = '🔐 Iniciando sesión en Auto1...';
+    document.getElementById('log-output').textContent = '⏳ Abriendo ventana de Chromium...\nHaz login en la ventana que aparecerá.\nEl script detectará el login automáticamente.\n';
+    document.getElementById('log-panel').scrollIntoView({ behavior: 'smooth' });
+
+    fetch('/login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) {
+          logInterval = setInterval(pollLogs, 1000);
+        } else {
+          document.getElementById('log-output').textContent += '\n❌ ' + d.error;
+        }
+      });
+  }
+
+  // ── TAMBIÉN añadir /cookie-status al servidor (comprobamos si existe el archivo)
+  // (ver server.py)
+
+  // ── SCRAPING PUNTUAL ───────────────────────────────────
+  function selectManualVertical(channel, el) {
+    manualChannel = channel;
+    document.querySelectorAll('.manual-vertical-card').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  function getManualConfig() {
+    const countries = document.getElementById('m-countries').value;
+    return {
+      filtros: {
+        channel: manualChannel,
+        countries: countries === 'ALL' ? ['ES','FR','DE','PT','IT','NL','BE','PL'] : countries.split(','),
+        testDriveFindings: document.getElementById('m-testDriveFindings').value,
+        accidents: document.getElementById('m-accidents').value === 'false' ? false : true,
+        sort: 'relevanceSorting',
+        dir: 'asc',
+        mileageFrom: parseInt(document.getElementById('m-mileageFrom').value) || 0,
+        mileageTo: parseInt(document.getElementById('m-mileageTo').value) || 130000,
+        priceMin: parseInt(document.getElementById('m-priceMin').value) || 0,
+        priceMax: parseInt(document.getElementById('m-priceMax').value) || 9000,
+        regFrom: parseInt(document.getElementById('m-regFrom').value) || 2016,
+        regTo: parseInt(document.getElementById('m-regTo').value) || 2026,
+        makes: buildMakes('manual'),
+        bodyTypes: state.manual.bodyTypes,
+        canales: [manualChannel],
+        uploadedFrom: null,
+        uploadedTo: null,
+        pageSize: parseInt(document.getElementById('m-maxCars').value) || 100
+      },
+      seguridad: {
+        max_coches: parseInt(document.getElementById('m-maxCars').value),
+        dry_run: document.getElementById('m-dryRun').checked,
+        delay_entre_requests_segundos: parseInt(document.getElementById('m-delay').value)
+      },
+      schedule: { hora_scraping_1: "13:30", hora_scraping_2: "20:00" },
+      mercado: { buscar_wallapop: true, buscar_cochesnet: true, min_anuncios_para_precio_fiable: 3 }
+    };
+  }
+
+  function runScraperNow() {
+    const config = getManualConfig();
+    const isDry = config.seguridad.dry_run;
+    const canal = manualChannel === '24h' ? 'Subasta 24H' : 'Compra Ahora';
+    const msg = isDry
+      ? `⚡ Scraping puntual en SIMULACIÓN\nCanal: ${canal} · Máx ${config.seguridad.max_coches} coches\n\n¿Continuar?`
+      : `⚡ Scraping puntual en MODO REAL\nCanal: ${canal} · Máx ${config.seguridad.max_coches} coches\n\nNO afectará la configuración de los crons.\n\n¿Continuar?`;
+
+    if (!confirm(msg)) return;
+
+    document.getElementById('log-panel').style.display = 'block';
+    document.getElementById('log-output').textContent = '⚡ Iniciando scraping puntual...\n';
+    document.getElementById('log-title').textContent = isDry ? '⏳ Simulando scraping puntual...' : '⚡ Ejecutando scraping puntual...';
+    document.getElementById('run-now-btn').disabled = true;
+    document.getElementById('run-now-btn').textContent = '⏳ Ejecutando...';
+    document.getElementById('run-btn').disabled = true;
+    document.getElementById('log-panel').scrollIntoView({ behavior: 'smooth' });
+
+    fetch('/run-scraper-now', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.ok) {
+        document.getElementById('log-output').textContent = '❌ Error: ' + data.error;
+        document.getElementById('run-now-btn').disabled = false;
+        document.getElementById('run-now-btn').textContent = '⚡ Lanzar scraping ahora';
+        document.getElementById('run-btn').disabled = false;
+        return;
+      }
+      logInterval = setInterval(() => pollLogsManual(), 1000);
+    })
+    .catch(e => {
+      document.getElementById('log-output').textContent = '❌ No se pudo conectar con el servidor: ' + e;
+      document.getElementById('run-now-btn').disabled = false;
+      document.getElementById('run-now-btn').textContent = '⚡ Lanzar scraping ahora';
+      document.getElementById('run-btn').disabled = false;
+    });
+  }
+
+  function pollLogsManual() {
+    fetch('/scraper-status')
+      .then(r => r.json())
+      .then(data => {
+        const el = document.getElementById('log-output');
+        el.textContent = data.log.join('\n');
+        el.scrollTop = el.scrollHeight;
+
+        if (!data.running) {
+          clearInterval(logInterval);
+          document.getElementById('run-now-btn').disabled = false;
+          document.getElementById('run-now-btn').textContent = '⚡ Lanzar scraping ahora';
+          document.getElementById('run-btn').disabled = false;
+          document.getElementById('log-title').textContent = '✅ Scraping puntual completado';
+          checkExcel();
+        }
+      });
+  }
+
+  // ── PERFILES ───────────────────────────────────────────
+
+  let _profiles = [];
+
+  function loadProfiles() {
+    fetch('/list-profiles')
+      .then(r => r.json())
+      .then(profiles => {
+        _profiles = profiles;
+        renderProfilesList();
+        updateProfileDropdowns();
+      })
+      .catch(() => {});
+  }
+
+  function renderProfilesList() {
+    const container = document.getElementById('profiles-list');
+    if (!_profiles.length) {
+      container.innerHTML = '<p style="color:#aaa;font-size:13px;font-style:italic;">No hay perfiles guardados aún.</p>';
+      return;
+    }
+    container.innerHTML = _profiles.map(p => {
+      const date = p.createdAt ? p.createdAt.replace('T', ' ').slice(0, 16) : '';
+      const nameEsc = p.name.replace(/'/g, "\\'");
+      return `<div class="profile-row">
+        <div>
+          <div class="profile-name">${p.name}</div>
+          <div class="profile-date">${date}</div>
+        </div>
+        <div class="profile-actions">
+          <button class="btn-profile btn-load" onclick="loadProfile('${nameEsc}')">📂 Cargar</button>
+          <button class="btn-profile btn-delete" onclick="deleteProfile('${nameEsc}')">🗑 Eliminar</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function updateProfileDropdowns() {
+    ['profile1', 'profile2'].forEach(id => {
+      const sel = document.getElementById(id);
+      const current = sel.value;
+      sel.innerHTML = '<option value="">Sin perfil</option>';
+      _profiles.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name;
+        sel.appendChild(opt);
+      });
+      // Restaurar selección si sigue existiendo
+      if (_profiles.some(p => p.name === current)) sel.value = current;
+    });
+  }
+
+  function saveCurrentProfile() {
+    const name = document.getElementById('profile-name-input').value.trim();
+    if (!name) { alert('Escribe un nombre para el perfil'); return; }
+    const filtros = getManualConfig().filtros;
+    fetch('/save-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, filtros })
+    })
+    .then(r => r.json())
+    .then(() => {
+      document.getElementById('profile-name-input').value = '';
+      loadProfiles();
+    });
+  }
+
+  function loadProfile(name) {
+    const p = _profiles.find(x => x.name === name);
+    if (!p || !p.filtros) return;
+    const f = p.filtros;
+    // Rellenar formulario puntual con los filtros del perfil
+    if (f.priceMin !== undefined) document.getElementById('m-priceMin').value = f.priceMin;
+    if (f.priceMax !== undefined) document.getElementById('m-priceMax').value = f.priceMax;
+    if (f.mileageFrom !== undefined) document.getElementById('m-mileageFrom').value = f.mileageFrom;
+    if (f.mileageTo !== undefined) document.getElementById('m-mileageTo').value = f.mileageTo;
+    if (f.regFrom !== undefined) document.getElementById('m-regFrom').value = f.regFrom;
+    if (f.regTo !== undefined) document.getElementById('m-regTo').value = f.regTo;
+    if (f.countries) {
+      const cs = Array.isArray(f.countries) ? f.countries.join(',') : f.countries;
+      const sel = document.getElementById('m-countries');
+      // intentar encontrar la opción exacta
+      const opt = [...sel.options].find(o => o.value === cs);
+      if (opt) sel.value = cs;
+    }
+    if (f.testDriveFindings) document.getElementById('m-testDriveFindings').value = f.testDriveFindings;
+    if (f.accidents !== undefined) document.getElementById('m-accidents').value = String(f.accidents);
+    if (f.channel) {
+      manualChannel = f.channel;
+      document.querySelectorAll('.manual-vertical-card').forEach(c => c.classList.remove('active'));
+      const cards = document.querySelectorAll('.manual-vertical-card');
+      cards.forEach(c => { if (c.querySelector('.channel-badge') && c.querySelector('.channel-badge').textContent.includes(f.channel)) c.classList.add('active'); });
+    }
+    // Marcas y modelos
+    if (f.makes && f.makes.length) {
+      state.manual.makes  = f.makes.map(m => m.make || m);
+      state.manual.models = f.makes.flatMap(m => m.models || []);
+    } else {
+      state.manual.makes = [];
+      state.manual.models = [];
+    }
+    renderMsTags('m-make'); updateMsLabel('m-make');
+    renderMsTags('m-model'); updateMsLabel('m-model');
+    // Carrocerías
+    setBodyTypes('manual', f.bodyTypes || []);
+
+    alert(`✅ Perfil "${name}" cargado en el formulario puntual.`);
+  }
+
+  function deleteProfile(name) {
+    if (!confirm(`¿Eliminar el perfil "${name}"?`)) return;
+    fetch('/delete-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    })
+    .then(r => r.json())
+    .then(() => loadProfiles());
+  }
+
+  function saveCronProfile(slot) {
+    const selId = 'profile' + slot;
+    const profileName = document.getElementById(selId).value;
+    // Leer config actual del servidor y actualizarla
+    fetch('/load-config')
+      .then(r => r.json())
+      .then(config => {
+        if (!config.schedule) config.schedule = {};
+        config.schedule['profile_' + slot] = profileName;
+        return fetch('/save-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(config)
+        });
+      })
+      .catch(() => {});
+  }
+
+  // ── PRESETS SCRAPING PUNTUAL (localStorage) ────────────────
+
+  function _getPresets() {
+    try { return JSON.parse(localStorage.getItem('manual_presets') || '[]'); } catch { return []; }
+  }
+  function _savePresets(list) {
+    localStorage.setItem('manual_presets', JSON.stringify(list));
+  }
+
+  function saveManualPreset() {
+    const name = document.getElementById('preset-name-input').value.trim();
+    if (!name) { alert('Escribe un nombre para el preset.'); return; }
+    const config = getManualConfig();
+    const presets = _getPresets().filter(p => p.name !== name); // reemplaza si existe
+    presets.unshift({ name, createdAt: new Date().toISOString(), config });
+    _savePresets(presets);
+    document.getElementById('preset-name-input').value = '';
+    renderManualPresets();
+    alert(`✅ Preset "${name}" guardado.`);
+  }
+
+  function loadManualPreset(name) {
+    const preset = _getPresets().find(p => p.name === name);
+    if (!preset) return;
+    const f = preset.config.filtros || {};
+    const s = preset.config.seguridad || {};
+
+    // Canal
+    if (f.channel) {
+      manualChannel = f.channel;
+      document.querySelectorAll('.manual-vertical-card').forEach(c => c.classList.remove('active'));
+      document.querySelectorAll('.manual-vertical-card').forEach(c => {
+        if ((c.querySelector('.channel-badge') || {}).textContent?.includes(f.channel)) c.classList.add('active');
+      });
+    }
+    // Rangos numéricos
+    if (f.priceMin  !== undefined) document.getElementById('m-priceMin').value  = f.priceMin;
+    if (f.priceMax  !== undefined) document.getElementById('m-priceMax').value  = f.priceMax;
+    if (f.mileageFrom !== undefined) document.getElementById('m-mileageFrom').value = f.mileageFrom;
+    if (f.mileageTo   !== undefined) document.getElementById('m-mileageTo').value   = f.mileageTo;
+    if (f.regFrom !== undefined) document.getElementById('m-regFrom').value = f.regFrom;
+    if (f.regTo   !== undefined) document.getElementById('m-regTo').value   = f.regTo;
+    // País, calidad
+    if (f.countries) {
+      const v = f.countries.join(',');
+      const sel = document.getElementById('m-countries');
+      [...sel.options].forEach(o => { if (o.value === v) sel.value = v; });
+    }
+    if (f.testDriveFindings) document.getElementById('m-testDriveFindings').value = f.testDriveFindings;
+    if (f.accidents !== undefined) document.getElementById('m-accidents').value = String(f.accidents);
+    // Marcas/modelos
+    if (f.makes && f.makes.length) {
+      state.manual.makes  = f.makes.map(m => m.make).filter(Boolean);
+      state.manual.models = f.makes.flatMap(m => m.models || []);
+    } else {
+      state.manual.makes  = [];
+      state.manual.models = [];
+    }
+    renderMsTags('m-make');  updateMsLabel('m-make');
+    renderMsTags('m-model'); updateMsLabel('m-model');
+    // Carrocerías
+    setBodyTypes('manual', f.bodyTypes || []);
+    // Seguridad
+    if (s.max_coches) {
+      document.getElementById('m-maxCars').value = s.max_coches;
+      document.getElementById('m-max-cars-display').textContent = s.max_coches;
+    }
+    if (s.delay_entre_requests_segundos) {
+      document.getElementById('m-delay').value = s.delay_entre_requests_segundos;
+      document.getElementById('m-delay-display').textContent = s.delay_entre_requests_segundos + 's';
+    }
+    if (s.dry_run !== undefined) {
+      document.getElementById('m-dryRun').checked = s.dry_run;
+      updateDryRunUI();
+    }
+  }
+
+  function deleteManualPreset(name) {
+    if (!confirm(`¿Eliminar el preset "${name}"?`)) return;
+    _savePresets(_getPresets().filter(p => p.name !== name));
+    renderManualPresets();
+  }
+
+  function renderManualPresets() {
+    const presets = _getPresets();
+    const container = document.getElementById('manual-presets-list');
+    if (!presets.length) {
+      container.innerHTML = '<p style="color:#aaa;font-size:12px;font-style:italic;margin:0;">No hay presets guardados aún.</p>';
+      return;
+    }
+    container.innerHTML = presets.map(p => {
+      const f = p.config?.filtros || {};
+      const models = (f.makes || []).flatMap(m => m.models || []);
+      const bts = (f.bodyTypes || []).join(', ') || '—';
+      const makes = (f.makes || []).map(m => m.make).filter(Boolean).join(', ') || 'Todas';
+      const summary = models.length
+        ? `Modelos: ${models.join(', ')} · ${f.priceMin}–${f.priceMax}€`
+        : `Marcas: ${makes} · ${f.priceMin}–${f.priceMax}€`;
+      const nameEsc = p.name.replace(/'/g, "\\'");
+      const date = (p.createdAt || '').replace('T',' ').slice(0,16);
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:white;border:1.5px solid #eee;border-radius:8px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:#333;">${p.name}</div>
+          <div style="font-size:11px;color:#aaa;">${summary}</div>
+          <div style="font-size:10px;color:#ccc;">${date}</div>
+        </div>
+        <button onclick="loadManualPreset('${nameEsc}')"
+                style="padding:5px 12px;background:#4a90d9;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+          📂 Cargar
+        </button>
+        <button onclick="deleteManualPreset('${nameEsc}')"
+                style="padding:5px 10px;background:#e05a5a;color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer;">
+          🗑
+        </button>
+      </div>`;
+    }).join('');
+  }
+
+  // Cargar al inicio — el formulario puntual hereda los bodyTypes del config.json
+  loadConfig();
+  fetch('/load-config')
+    .then(r => r.json())
+    .then(cfg => {
+      const bt = cfg?.filtros?.bodyTypes;
+      if (bt && bt.length) setBodyTypes('manual', bt);
+    })
+    .catch(() => {});
+  loadProfiles();
+  renderManualPresets();
+  updateDryRunUI();
+  checkExcel();
+  checkCookies();
+  setInterval(checkExcel, 10000);
+  setInterval(checkCookies, 5000); // Refrescar cada 10s
+</script>
+</body>
+</html>

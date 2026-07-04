@@ -1,0 +1,22 @@
+{
+  "filtros": {
+    "channel": "ip",
+    "countries": [
+      "ES"
+    ],
+    "bodyTypes": [
+      "commercial"
+    ],
+    "priceMin": 2000,
+    "priceMax": 9000,
+    "pageSize": 10,
+    "testDriveFindings": "none",
+    "accidents": false
+  },
+  "seguridad": {
+    "max_coches": 10,
+    "dry_run": false,
+    "delay_entre_requests_segundos": 3
+  },
+  "google_sheets_id": "1ugSu-uDVZYnVWyFrq02xYo8Fm14Ui9ZW-3z9YBwHxgY"
+}
