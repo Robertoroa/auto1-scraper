@@ -1,0 +1,8 @@
+playwright
+apscheduler
+gspread
+google-auth
+google-api-python-client
+openpyxl
+python-dotenv
+requests
