@@ -748,7 +748,7 @@
         <h3>Subasta 24H</h3>
         <span class="channel-badge" style="display:inline-block; margin-top:6px; font-size:10px; padding:2px 8px; border-radius:20px; font-family:monospace;">channel=24h</span>
       </div>
-      <div class="manual-vertical-card" onclick="selectManualVertical('ip', this)">
+      <div class="manual-vertical-card active" onclick="selectManualVertical('ip', this)">
         <div class="icon">⚡</div>
         <h3>Compra Ahora</h3>
         <span class="channel-badge" style="display:inline-block; margin-top:6px; font-size:10px; padding:2px 8px; border-radius:20px; font-family:monospace;">channel=ip</span>
@@ -1000,6 +1000,7 @@
   // ── ESTADO ─────────────────────────────────────────────
   let selectedChannel = '24h';
   let manualChannel = '24h';
+  let selectedManualChannels = new Set(['24h', 'ip']);
 
   // Selecciones por sección: 'main' y 'manual'
   const state = {
@@ -1437,9 +1438,16 @@
 
   // ── SCRAPING PUNTUAL ───────────────────────────────────
   function selectManualVertical(channel, el) {
-    manualChannel = channel;
-    document.querySelectorAll('.manual-vertical-card').forEach(c => c.classList.remove('active'));
-    el.classList.add('active');
+    if (selectedManualChannels.has(channel)) {
+      // No permitir deseleccionar si es el único activo
+      if (selectedManualChannels.size === 1) return;
+      selectedManualChannels.delete(channel);
+      el.classList.remove('active');
+    } else {
+      selectedManualChannels.add(channel);
+      el.classList.add('active');
+    }
+    manualChannel = [...selectedManualChannels][0];
   }
 
   function getManualConfig() {
@@ -1460,7 +1468,7 @@
         regTo: parseInt(document.getElementById('m-regTo').value) || 2026,
         makes: buildMakes('manual'),
         bodyTypes: state.manual.bodyTypes,
-        canales: [manualChannel],
+        canales: [...selectedManualChannels],
         uploadedFrom: null,
         uploadedTo: null,
         pageSize: parseInt(document.getElementById('m-maxCars').value) || 100
@@ -1478,10 +1486,10 @@
   function runScraperNow() {
     const config = getManualConfig();
     const isDry = config.seguridad.dry_run;
-    const canal = manualChannel === '24h' ? 'Subasta 24H' : 'Compra Ahora';
+    const canalesNombres = [...selectedManualChannels].map(c => c === '24h' ? 'Subasta 24H' : 'Compra Ahora').join(' + ');
     const msg = isDry
-      ? `⚡ Scraping puntual en SIMULACIÓN\nCanal: ${canal} · Máx ${config.seguridad.max_coches} coches\n\n¿Continuar?`
-      : `⚡ Scraping puntual en MODO REAL\nCanal: ${canal} · Máx ${config.seguridad.max_coches} coches\n\nNO afectará la configuración de los crons.\n\n¿Continuar?`;
+      ? `⚡ Scraping puntual en SIMULACIÓN\nCanales: ${canalesNombres} · Máx ${config.seguridad.max_coches} coches\n\n¿Continuar?`
+      : `⚡ Scraping puntual en MODO REAL\nCanales: ${canalesNombres} · Máx ${config.seguridad.max_coches} coches\n\nNO afectará la configuración de los crons.\n\n¿Continuar?`;
 
     if (!confirm(msg)) return;
 
@@ -1625,12 +1633,15 @@
     }
     if (f.testDriveFindings) document.getElementById('m-testDriveFindings').value = f.testDriveFindings;
     if (f.accidents !== undefined) document.getElementById('m-accidents').value = String(f.accidents);
-    if (f.channel) {
-      manualChannel = f.channel;
-      document.querySelectorAll('.manual-vertical-card').forEach(c => c.classList.remove('active'));
-      const cards = document.querySelectorAll('.manual-vertical-card');
-      cards.forEach(c => { if (c.querySelector('.channel-badge') && c.querySelector('.channel-badge').textContent.includes(f.channel)) c.classList.add('active'); });
-    }
+    const canalesPreset = f.canales || (f.channel ? [f.channel] : ['24h', 'ip']);
+    selectedManualChannels = new Set(canalesPreset);
+    manualChannel = canalesPreset[0];
+    document.querySelectorAll('.manual-vertical-card').forEach(c => {
+      const badge = c.querySelector('.channel-badge');
+      if (!badge) return;
+      const ch = badge.textContent.includes('24h') ? '24h' : 'ip';
+      c.classList.toggle('active', selectedManualChannels.has(ch));
+    });
     // Marcas y modelos
     if (f.makes && f.makes.length) {
       state.manual.makes  = f.makes.map(m => m.make || m);
@@ -1704,13 +1715,15 @@
     const s = preset.config.seguridad || {};
 
     // Canal
-    if (f.channel) {
-      manualChannel = f.channel;
-      document.querySelectorAll('.manual-vertical-card').forEach(c => c.classList.remove('active'));
-      document.querySelectorAll('.manual-vertical-card').forEach(c => {
-        if ((c.querySelector('.channel-badge') || {}).textContent?.includes(f.channel)) c.classList.add('active');
-      });
-    }
+    const canalesLoad = f.canales || (f.channel ? [f.channel] : ['24h', 'ip']);
+    selectedManualChannels = new Set(canalesLoad);
+    manualChannel = canalesLoad[0];
+    document.querySelectorAll('.manual-vertical-card').forEach(c => {
+      const badge = c.querySelector('.channel-badge');
+      if (!badge) return;
+      const ch = badge.textContent.includes('24h') ? '24h' : 'ip';
+      c.classList.toggle('active', selectedManualChannels.has(ch));
+    });
     // Rangos numéricos
     if (f.priceMin  !== undefined) document.getElementById('m-priceMin').value  = f.priceMin;
     if (f.priceMax  !== undefined) document.getElementById('m-priceMax').value  = f.priceMax;
