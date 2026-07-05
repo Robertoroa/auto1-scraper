@@ -125,16 +125,38 @@ def _modelo_slug(modelo: str) -> str:
     return m
 
 
-def _construir_urls(marca: str, modelo: str, año: int) -> list:
+def _construir_query(año: int, km: int) -> str:
+    """
+    Construye la query string de filtros para coches.net.
+
+    - MinYear: descarta coches mucho más viejos (año − AÑO_MAX_ANTIGUEDAD).
+      Los más nuevos siempre entran (marcan el precio techo).
+    - MaxKms: descarta coches con muchos más km (km_objetivo × KM_MAX_FACTOR).
+      Los de menos km siempre entran (son mejores).
+    - fi=Price&or=1: ordena por precio ASCENDENTE, así la primera página ya
+      contiene los anuncios baratos comparables (antes cogía la página por
+      relevancia y los baratos ni aparecían en la muestra).
+    """
+    params = ["fi=Price", "or=1"]
+    if año and año > 1990:
+        params.append(f"MinYear={int(año) - AÑO_MAX_ANTIGUEDAD}")
+    if km and km > 0:
+        max_km = min(int(km * KM_MAX_FACTOR), KM_MAX_ABSOLUTO)
+        params.append(f"MaxKms={max_km}")
+    return "?" + "&".join(params)
+
+
+def _construir_urls(marca: str, modelo: str, año: int, km: int = 0) -> list:
     ms = _marca_slug(marca)
     ml = _modelo_slug(modelo)
     # Fix por combinación marca+modelo
     combo_key = f"{ms}|{ml}"
     ml = _MARCA_MODELO_FIXES.get(combo_key, ml)
+    q = _construir_query(año, km)
     return [
-        f"https://www.coches.net/{ms}/{ml}/segunda-mano/",
-        f"https://www.coches.net/{ms}/{ml}/vehiculos-industriales/",
-        f"https://www.coches.net/{ms}/vehiculos-industriales/",
+        f"https://www.coches.net/{ms}/{ml}/segunda-mano/{q}",
+        f"https://www.coches.net/{ms}/{ml}/vehiculos-industriales/{q}",
+        f"https://www.coches.net/{ms}/vehiculos-industriales/{q}",
     ]
 
 
@@ -260,7 +282,7 @@ def _buscar_con_playwright(marca: str, modelo: str, año: int, km: int) -> dict:
     import tempfile, shutil
     from playwright.sync_api import sync_playwright
 
-    urls = _construir_urls(marca, modelo, año)
+    urls = _construir_urls(marca, modelo, año, km)
     resultado_vacio = {"items_filtrados": [], "todos_items": [], "precios_mercado_regex": [], "n_super_precio": 0, "url": ""}
 
     # coches.net bloquea el modo headless (fingerprinting avanzado).
