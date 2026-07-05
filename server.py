@@ -29,7 +29,8 @@ RESULTS_DIR.mkdir(exist_ok=True)
 scraper_state = {
     "running": False,
     "log": [],
-    "last_result": None
+    "last_result": None,
+    "started_at": None,
 }
 
 
@@ -215,6 +216,7 @@ class PanelHandler(SimpleHTTPRequestHandler):
 
         def run():
             scraper_state["running"] = True
+            scraper_state["started_at"] = time.time()
             scraper_state["log"] = ["🚀 Iniciando scraper..."]
             try:
                 python = str(BASE_DIR / "venv" / "bin" / "python3")
@@ -286,6 +288,7 @@ class PanelHandler(SimpleHTTPRequestHandler):
 
         def run():
             scraper_state["running"] = True
+            scraper_state["started_at"] = time.time()
             scraper_state["log"] = ["⚡ Scraping puntual iniciado (config temporal, sin afectar crons)..."]
             try:
                 python = str(BASE_DIR / "venv" / "bin" / "python3")
@@ -377,10 +380,29 @@ class PanelHandler(SimpleHTTPRequestHandler):
         self._json_response({"ok": True})
 
     def _handle_scraper_status(self):
-        """Devuelve el estado y logs del scraper."""
+        """Devuelve el estado, logs y progreso del scraper."""
+        import re
+        full = scraper_state["log"]
+        current = total = procesados = 0
+        canal = ""
+        for ln in full:
+            m = re.search(r"\[(24h|ip)\]\s+Procesando coche\s+(\d+)/(\d+)", ln)
+            if m:
+                procesados += 1
+                canal = m.group(1)
+                current = int(m.group(2))
+                total = int(m.group(3))
+        started = scraper_state.get("started_at")
+        elapsed = int(time.time() - started) if started else 0
         self._json_response({
             "running": scraper_state["running"],
-            "log": scraper_state["log"][-30:]  # Últimas 30 líneas
+            "log": scraper_state["log"][-30:],  # Últimas 30 líneas
+            "started_at": started,
+            "elapsed": elapsed,
+            "canal": canal,
+            "current": current,
+            "total": total,
+            "procesados": procesados,
         })
 
     def _handle_open_excel(self):
@@ -455,6 +477,7 @@ def lanzar_scraper_automatico(slot: str = None):
 
     print("⏰ Scheduler: lanzando scraper automático...")
     scraper_state["running"] = True
+    scraper_state["started_at"] = time.time()
     scraper_state["log"] = ["⏰ Scraping automático iniciado por el programador..."]
 
     def run(cfg_path):

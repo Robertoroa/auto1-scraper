@@ -6,6 +6,7 @@
   <title>Auto1 Scraper — Panel de Control</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { max-width: 100%; overflow-x: hidden; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f2f5; color: #222; }
 
     .header {
@@ -23,7 +24,7 @@
     .container { max-width: 900px; margin: 32px auto; padding: 0 16px; }
 
     /* VERTICALES */
-    .verticales { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 28px; }
+    .verticales { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 28px; }
     .vertical-card {
       background: white;
       border-radius: 12px;
@@ -315,7 +316,7 @@
     /* CARROCERÍAS */
     .body-types-grid {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
       gap: 8px;
       margin-top: 4px;
     }
@@ -334,6 +335,8 @@
       background: white;
       color: #555;
       user-select: none;
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
     .body-type-chip:hover { border-color: #e07b39; color: #e07b39; }
     .body-type-chip.selected { border-color: #e07b39; background: #fff3eb; color: #e07b39; font-weight: 600; }
@@ -430,6 +433,31 @@
     .btn-load:hover { background: #3276c3; }
     .btn-delete { background: #f8d7da; color: #842029; }
     .btn-delete:hover { background: #f5c6cb; }
+
+    /* ─────────── MÓVIL — responsive (sin scroll lateral) ─────────── */
+    @media (max-width: 640px) {
+      .header { padding: 14px 16px; }
+      .header h1 { font-size: 16px; }
+      .header .badge { font-size: 11px; padding: 3px 10px; }
+      .container { margin: 16px auto; padding: 0 12px; }
+      .section, .manual-section { padding: 16px; }
+      .section h2, .manual-section h2 { font-size: 14px; margin-bottom: 16px; }
+
+      /* Todas las rejillas multicolumna pasan a una sola columna */
+      .verticales { grid-template-columns: 1fr; gap: 10px; margin-bottom: 20px; }
+      .filters-grid { grid-template-columns: 1fr; gap: 14px; }
+      .dates-grid, .schedule-grid { grid-template-columns: 1fr; }
+      .security-grid { grid-template-columns: 1fr; gap: 10px; }
+      .manual-verticales { gap: 8px; }
+
+      /* Botones de acción a ancho completo, apilados */
+      .actions { flex-direction: column; }
+      .actions .btn { width: 100%; }
+
+      /* Tarjetas horizontales que se envuelven en vez de desbordar */
+      .excel-card, .status-bar, .dry-run-toggle, .profile-row { flex-wrap: wrap; gap: 12px; }
+      .btn-excel { width: 100%; text-align: center; }
+    }
   </style>
 </head>
 <body>
@@ -725,6 +753,13 @@
   <div id="log-panel" style="display:none; margin-top:20px;">
     <div class="section">
       <h2 id="log-title">⏳ Ejecutando scraper...</h2>
+      <div id="progress-wrap" style="display:none; margin-top:4px;">
+        <div style="background:#e9ecef; border-radius:20px; height:14px; overflow:hidden;">
+          <div id="progress-bar" style="height:100%; width:0%; background:linear-gradient(90deg,#2a9d8f,#4ecdc4); transition:width .4s;"></div>
+        </div>
+        <div id="progress-text" style="font-size:12px; color:#555; margin-top:6px; font-weight:600;"></div>
+        <div id="progress-eta" style="font-size:11px; color:#888; margin-top:2px;"></div>
+      </div>
       <div id="log-output" style="
         background:#1a1a2e; color:#a8ff78; font-family:monospace;
         font-size:12px; padding:16px; border-radius:8px;
@@ -1367,15 +1402,75 @@
         const el = document.getElementById('log-output');
         el.textContent = data.log.join('\n');
         el.scrollTop = el.scrollHeight; // Auto-scroll abajo
+        updateProgress(data);
 
         if (!data.running) {
           clearInterval(logInterval);
+          logInterval = null;
           document.getElementById('run-btn').disabled = false;
           document.getElementById('run-btn').textContent = '▶️ Ejecutar ahora';
+          document.getElementById('run-now-btn').disabled = false;
+          document.getElementById('run-now-btn').textContent = '⚡ Lanzar scraping ahora';
           document.getElementById('log-title').textContent = '✅ Scraper completado';
           checkExcel(); // Refrescar Excel por si hay uno nuevo
         }
       });
+  }
+
+  // ── Barra de progreso + tiempo estimado ─────────────────
+  function fmtDur(s) {
+    s = Math.max(0, Math.round(s));
+    const m = Math.floor(s / 60), sec = s % 60;
+    return m > 0 ? (m + 'm ' + sec + 's') : (sec + 's');
+  }
+
+  function updateProgress(data) {
+    const wrap = document.getElementById('progress-wrap');
+    if (!wrap) return;
+    if (!data.running) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+
+    const total = data.total || 0;
+    const current = data.current || 0;
+    const procesados = data.procesados || 0;
+    const elapsed = data.elapsed || 0;
+    const pct = total > 0 ? Math.min(100, Math.round(current / total * 100)) : 0;
+
+    document.getElementById('progress-bar').style.width = pct + '%';
+
+    const canalTxt = data.canal ? ('Canal ' + data.canal) : 'Preparando';
+    document.getElementById('progress-text').textContent =
+      total > 0 ? `${canalTxt}: ${current}/${total} coches (${pct}%)` : `${canalTxt}…`;
+
+    let etaTxt = `⏱️ ${fmtDur(elapsed)} transcurrido`;
+    if (procesados > 0 && total > 0 && current < total) {
+      const secPerCar = elapsed / procesados;
+      const etaSec = Math.round(secPerCar * (total - current));
+      etaTxt += ` · ≈ ${fmtDur(etaSec)} restante (canal actual)`;
+    } else if (total > 0 && current >= total) {
+      etaTxt += ` · consultando precios de mercado…`;
+    }
+    document.getElementById('progress-eta').textContent = etaTxt;
+  }
+
+  // Al cargar la página: si hay un scrapeo en curso, recupera el log y reanuda
+  function resumeIfRunning() {
+    fetch('/scraper-status')
+      .then(r => r.json())
+      .then(data => {
+        if (!data.running) return;
+        document.getElementById('log-panel').style.display = 'block';
+        document.getElementById('log-title').textContent = '⏳ Scrapeo en ejecución...';
+        const el = document.getElementById('log-output');
+        el.textContent = (data.log || []).join('\n');
+        el.scrollTop = el.scrollHeight;
+        updateProgress(data);
+        document.getElementById('run-btn').disabled = true;
+        document.getElementById('run-btn').textContent = '⏳ Ejecutando...';
+        document.getElementById('run-now-btn').disabled = true;
+        if (!logInterval) logInterval = setInterval(pollLogs, 1000);
+      })
+      .catch(() => {});
   }
 
   // ── EXCEL ──────────────────────────────────────────
@@ -1532,9 +1627,11 @@
         const el = document.getElementById('log-output');
         el.textContent = data.log.join('\n');
         el.scrollTop = el.scrollHeight;
+        updateProgress(data);
 
         if (!data.running) {
           clearInterval(logInterval);
+          logInterval = null;
           document.getElementById('run-now-btn').disabled = false;
           document.getElementById('run-now-btn').textContent = '⚡ Lanzar scraping ahora';
           document.getElementById('run-btn').disabled = false;
@@ -1919,6 +2016,7 @@
   updateDryRunUI();
   checkExcel();
   checkCookies();
+  resumeIfRunning(); // Si hay un scrapeo activo, recupera el log al volver al panel
   setInterval(checkExcel, 10000);
   setInterval(checkCookies, 5000); // Refrescar cada 10s
 </script>
