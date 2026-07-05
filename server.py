@@ -526,8 +526,8 @@ def run(port=8765):
     scheduler, reprogramar = iniciar_scheduler()
     _reprogramar_scheduler = reprogramar
 
-    server = HTTPServer(("localhost", port), PanelHandler)
-    print(f"✅ Panel disponible en http://localhost:{port}")
+    server = HTTPServer(("0.0.0.0", port), PanelHandler)
+    print(f"✅ Panel disponible en http://0.0.0.0:{port}")
     print(f"   Ctrl+C para detener\n")
     try:
         server.serve_forever()
