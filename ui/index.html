@@ -602,6 +602,13 @@
         </select>
       </div>
 
+      <div class="filter-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="excluirAverias" checked style="width:16px; height:16px; accent-color:#e07b39;">
+          Excluir coches con fallo en motor o prueba dinámica
+        </label>
+      </div>
+
       <!-- MARCA -->
       <div class="filter-group">
         <label>Marca (opcional)</label>
@@ -843,6 +850,13 @@
           <option value="false">✅ Sin accidentes</option>
           <option value="true" selected>Todos</option>
         </select>
+      </div>
+
+      <div class="filter-group">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="m-excluirAverias" checked style="width:16px; height:16px; accent-color:#e07b39;">
+          Excluir coches con fallo en motor o prueba dinámica
+        </label>
       </div>
 
       <!-- MARCA PUNTUAL -->
@@ -1250,6 +1264,7 @@
         countries: countries === 'ALL' ? ['ES','FR','DE','PT','IT','NL','BE','PL'] : countries.split(','),
         testDriveFindings: document.getElementById('testDriveFindings').value,
         accidents: document.getElementById('accidents').value === 'false' ? false : true,
+        excluir_averias: document.getElementById('excluirAverias').checked,
         sort: 'relevanceSorting',
         dir: 'asc',
         mileageFrom: parseInt(document.getElementById('mileageFrom').value) || 0,
@@ -1318,6 +1333,7 @@
       document.getElementById('delay-display').textContent = s.delay_entre_requests_segundos + 's';
     }
     if (s.dry_run !== undefined) document.getElementById('dryRun').checked = s.dry_run;
+    document.getElementById('excluirAverias').checked = f.excluir_averias !== false;
     if (sch.hora_scraping_1) document.getElementById('schedule1').value = sch.hora_scraping_1;
     if (sch.hora_scraping_2) document.getElementById('schedule2').value = sch.hora_scraping_2;
     if (sch.profile_1 !== undefined) document.getElementById('profile1').value = sch.profile_1 || '';
@@ -1568,6 +1584,7 @@
         countries: countries === 'ALL' ? ['ES','FR','DE','PT','IT','NL','BE','PL'] : countries.split(','),
         testDriveFindings: document.getElementById('m-testDriveFindings').value,
         accidents: document.getElementById('m-accidents').value === 'false' ? false : true,
+        excluir_averias: document.getElementById('m-excluirAverias').checked,
         sort: 'relevanceSorting',
         dir: 'asc',
         mileageFrom: parseInt(document.getElementById('m-mileageFrom').value) || 0,
@@ -1745,6 +1762,7 @@
     }
     if (f.testDriveFindings) document.getElementById('m-testDriveFindings').value = f.testDriveFindings;
     if (f.accidents !== undefined) document.getElementById('m-accidents').value = String(f.accidents);
+    document.getElementById('m-excluirAverias').checked = f.excluir_averias !== false;
     const canalesPreset = f.canales || (f.channel ? [f.channel] : ['24h', 'ip']);
     selectedManualChannels = new Set(canalesPreset);
     manualChannel = canalesPreset[0];
@@ -1867,6 +1885,7 @@
     }
     if (f.testDriveFindings !== undefined) document.getElementById('m-testDriveFindings').value = f.testDriveFindings;
     if (f.accidents !== undefined) document.getElementById('m-accidents').value = String(f.accidents);
+    document.getElementById('m-excluirAverias').checked = f.excluir_averias !== false;
     if (f.makes && f.makes.length) {
       state.manual.makes  = f.makes.map(m => m.make).filter(Boolean);
       state.manual.models = f.makes.flatMap(m => m.models || []);
@@ -1932,6 +1951,7 @@
     }
     if (f.testDriveFindings) document.getElementById('m-testDriveFindings').value = f.testDriveFindings;
     if (f.accidents !== undefined) document.getElementById('m-accidents').value = String(f.accidents);
+    document.getElementById('m-excluirAverias').checked = f.excluir_averias !== false;
     // Marcas/modelos
     if (f.makes && f.makes.length) {
       state.manual.makes  = f.makes.map(m => m.make).filter(Boolean);

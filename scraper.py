@@ -1024,17 +1024,26 @@ def ejecutar_scraping():
             logger.info(f"   💰 {tipo_compra} ({auction_type}) — precio: {precio}€")
 
             danos = tiene_danos_motor(detalle)
+            revision = construir_revision(detalle)
+            averias_prueba = revision.get("resumen", {}).get("averias", []) or []
             transporte = {
                 "transporte_coste": ficha.get("transporte_coste"),
                 "transporte_dias": ficha.get("transporte_dias"),
                 "transporte_opcion": ficha.get("transporte_opcion"),
             }
 
-            if danos is True:
-                logger.info(f"   ❌ Descartado: tiene daños en motor")
-                continue
-            elif danos is None:
-                logger.warning(f"   ⚠️  REVISIÓN HUMANA REQUERIDA: no se pudo verificar ficha")
+            # Check del panel: excluir coches con fallo en motor o en prueba dinámica.
+            # Por defecto activado (True) para conservar el comportamiento anterior.
+            excluir_averias = filtros.get("excluir_averias", True)
+            if excluir_averias:
+                if danos is True:
+                    logger.info(f"   ❌ Descartado: tiene daños en motor")
+                    continue
+                if averias_prueba:
+                    logger.info(f"   ❌ Descartado: avería en prueba dinámica ({', '.join(averias_prueba)})")
+                    continue
+                if danos is None:
+                    logger.warning(f"   ⚠️  REVISIÓN HUMANA REQUERIDA: no se pudo verificar ficha")
 
             resultados.append({
                 "id": coche_id,
@@ -1054,7 +1063,7 @@ def ejecutar_scraping():
                 "transporte_dias": transporte.get("transporte_dias"),
                 "transporte_opcion": transporte.get("transporte_opcion"),
                 "imagenes": ficha.get("imagenes", []),
-                "revision": construir_revision(detalle),
+                "revision": revision,
                 "auto1_url": f"https://www.auto1.com/es/app/merchant/car/{referencia}",
             })
 
