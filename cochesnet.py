@@ -4,7 +4,8 @@ Módulo de precios de mercado via coches.net.
 - Excluye coches con averías declaradas
 - Lógica "precio techo": acepta coches iguales o MEJORES (mismo año o más nuevo,
   km hasta +20%) y descarta solo los claramente peores (mucho más viejos / más km)
-- Precio final = media de los 3 más baratos que pasen los filtros
+- Precio final = el más barato REALISTA (descarta precios ridículos: >30% por
+  debajo del siguiente anuncio)
 - URL pattern para furgonetas: /{marca}/{modelo}/vehiculos-industriales/
 - URL pattern para coches:     /{marca}/{modelo}/segunda-mano/
 - Extrae datos del script __INITIAL_PROPS__ (JSON escapado dentro del HTML)
@@ -25,7 +26,7 @@ logger = logging.getLogger("auto1_scraper")
 CACHE_FILE = Path(__file__).parent / "logs" / "cochesnet_cache.json"
 
 MIN_SUPER_PRECIO = 2   # mínimo de anuncios "Super precio" limpios para considerar el dato fiable
-N_TOP_BARATOS    = 3   # cuántos de los más baratos promediar
+GAP_OUTLIER      = 0.30  # si el más barato está >30% por debajo del siguiente, se considera precio ridículo y se pasa al siguiente
 
 # Tolerancias para filtrar por año y km — LÓGICA DE "PRECIO TECHO".
 # Un coche MÁS NUEVO o con MENOS km siempre es comparable (es igual o mejor que el
@@ -229,16 +230,26 @@ def _filtrar_items(items: list, año_obj: int, km_obj: int) -> list:
     return resultado
 
 
-def _precio_medio_top_n(items_filtrados: list, n: int = N_TOP_BARATOS) -> int | None:
-    """Ordena por precio ascendente, coge los N más baratos y devuelve su media."""
-    if not items_filtrados:
-        return None
-    ordenados = sorted(items_filtrados, key=lambda x: x.get("price", 999999))
-    top = ordenados[:n]
-    precios = [x["price"] for x in top if x.get("price")]
+def _precio_mas_barato_realista(items_filtrados: list, gap: float = GAP_OUTLIER) -> int | None:
+    """
+    Devuelve el precio más barato REALISTA de la lista.
+
+    Ordena los precios de menor a mayor y coge el más barato, salvo que esté
+    "descolgado": si un precio es más de `gap` (30%) por debajo del siguiente,
+    se considera un precio ridículo (error, siniestro no declarado, estafa…) y
+    se pasa al siguiente. Se repite hacia arriba hasta el primero no descolgado.
+    """
+    precios = sorted(p for it in items_filtrados if (p := it.get("price")) and p > 0)
     if not precios:
         return None
-    return int(sum(precios) / len(precios))
+    i = 0
+    while i < len(precios) - 1:
+        # ¿el actual está descolgado respecto al siguiente? → sospechoso, saltar
+        if precios[i] < precios[i + 1] * (1 - gap):
+            i += 1
+        else:
+            break
+    return int(precios[i])
 
 
 # ─────────────────────────────────────────
@@ -338,11 +349,13 @@ def _buscar_con_playwright(marca: str, modelo: str, año: int, km: int) -> dict:
 def precio_mercado_cochesnet(marca: str, modelo: str, año: int, km: int) -> dict:
     """
     Precio de referencia según coches.net. Prioridad:
-    A. Media de los 3 más baratos con "Super precio"  (rank 1)
-    B. Media de los 3 más baratos con "Buen precio"   (rank 2)
-    C. Media de los 3 más baratos sin filtro de rank  (todos los anuncios limpios)
+    A. Más barato realista con "Super precio"  (rank 1)
+    B. Más barato realista con "Buen precio"   (rank 2)
+    C. Más barato realista sin filtro de rank  (todos los anuncios limpios)
 
-    En todos los casos se excluyen coches con averías y se filtra por año/km similar.
+    "Más barato realista" = el anuncio más barato descartando precios ridículos
+    (los que están >30% por debajo del siguiente). Además se excluyen coches con
+    averías y se filtra por año/km similar (lógica de precio techo).
     """
     resultado_vacio = {"precio_medio": None, "n_anuncios": 0, "fuente": "cochesnet", "url": ""}
 
@@ -358,29 +371,29 @@ def precio_mercado_cochesnet(marca: str, modelo: str, año: int, km: int) -> dic
         # Filtro base: sin averías + año/km similares (sin restricción de rank)
         base = _filtrar_items(todos_items, año, km)
 
-        def _media_top3(items, rank=None):
+        def _mas_barato(items, rank=None):
             pool = [it for it in items if rank is None or it.get("priceRankIndicator") == rank]
             if len(pool) < 1:
                 return None, 0
-            precio = _precio_medio_top_n(pool, N_TOP_BARATOS)
+            precio = _precio_mas_barato_realista(pool)
             return precio, len(pool)
 
         # Plan A — Super precio
-        precio, n = _media_top3(base, rank=1)
+        precio, n = _mas_barato(base, rank=1)
         if precio and n >= 1:
-            logger.info(f"   coches.net ✅ {marca} {modelo} {año} [A-Super precio]: {n} anuncios | media 3 baratos={precio:,}€")
+            logger.info(f"   coches.net ✅ {marca} {modelo} {año} [A-Super precio]: {n} anuncios | más barato realista={precio:,}€")
             return {"precio_medio": precio, "n_anuncios": n, "fuente": "cochesnet", "url": url}
 
         # Plan B — Buen precio
-        precio, n = _media_top3(base, rank=2)
+        precio, n = _mas_barato(base, rank=2)
         if precio and n >= 1:
-            logger.info(f"   coches.net ✅ {marca} {modelo} {año} [B-Buen precio]: {n} anuncios | media 3 baratos={precio:,}€")
+            logger.info(f"   coches.net ✅ {marca} {modelo} {año} [B-Buen precio]: {n} anuncios | más barato realista={precio:,}€")
             return {"precio_medio": precio, "n_anuncios": n, "fuente": "cochesnet", "url": url}
 
         # Plan C — Todos los anuncios limpios
-        precio, n = _media_top3(base, rank=None)
+        precio, n = _mas_barato(base, rank=None)
         if precio and n >= 1:
-            logger.info(f"   coches.net ✅ {marca} {modelo} {año} [C-Todos]: {n} anuncios | media 3 baratos={precio:,}€")
+            logger.info(f"   coches.net ✅ {marca} {modelo} {año} [C-Todos]: {n} anuncios | más barato realista={precio:,}€")
             return {"precio_medio": precio, "n_anuncios": n, "fuente": "cochesnet", "url": url}
 
         logger.info(f"   coches.net: sin anuncios válidos tras filtros para {marca} {modelo} {año}")
