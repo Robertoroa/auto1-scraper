@@ -31,7 +31,17 @@ scraper_state = {
     "log": [],
     "last_result": None,
     "started_at": None,
+    "canales": ["24h", "ip"],  # canales planificados para el run actual (para el % global)
 }
+
+
+def _canales_planificados(cfg: dict) -> list:
+    """Canales que procesará el scraper según la config (mismo criterio que scraper.py)."""
+    filtros = (cfg or {}).get("filtros", {}) if isinstance(cfg, dict) else {}
+    canales = filtros.get("canales")
+    if canales:
+        return list(canales)
+    return ["24h", "ip"]
 
 
 class PanelHandler(SimpleHTTPRequestHandler):
@@ -214,9 +224,16 @@ class PanelHandler(SimpleHTTPRequestHandler):
         if length:
             self.rfile.read(length)
 
+        try:
+            with open(CONFIG_FILE) as f:
+                _cfg = json.load(f)
+        except Exception:
+            _cfg = {}
+
         def run():
             scraper_state["running"] = True
             scraper_state["started_at"] = time.time()
+            scraper_state["canales"] = _canales_planificados(_cfg)
             scraper_state["log"] = ["🚀 Iniciando scraper..."]
             try:
                 python = str(BASE_DIR / "venv" / "bin" / "python3")
@@ -289,6 +306,7 @@ class PanelHandler(SimpleHTTPRequestHandler):
         def run():
             scraper_state["running"] = True
             scraper_state["started_at"] = time.time()
+            scraper_state["canales"] = _canales_planificados(config_override)
             scraper_state["log"] = ["⚡ Scraping puntual iniciado (config temporal, sin afectar crons)..."]
             try:
                 python = str(BASE_DIR / "venv" / "bin" / "python3")
@@ -380,18 +398,55 @@ class PanelHandler(SimpleHTTPRequestHandler):
         self._json_response({"ok": True})
 
     def _handle_scraper_status(self):
-        """Devuelve el estado, logs y progreso del scraper."""
+        """Devuelve el estado, logs y progreso del scraper.
+
+        El progreso es GLOBAL: el 100% abarca TODOS los canales planificados
+        (por defecto 24h + Compra Ahora), no solo el canal en curso. Así la
+        barra no vuelve a 0 al empezar el segundo canal.
+        """
         import re
         full = scraper_state["log"]
-        current = total = procesados = 0
-        canal = ""
+        planificados = scraper_state.get("canales") or ["24h", "ip"]
+
+        # Por canal: último "current" visto y su "total"; y canales ya completados.
+        canal_current = {}
+        canal_total = {}
+        completados = set()
+        procesados = 0        # nº de líneas "Procesando coche" (para ETA global)
+        canal_actual = ""
         for ln in full:
-            m = re.search(r"\[(24h|ip)\]\s+Procesando coche\s+(\d+)/(\d+)", ln)
+            m = re.search(r"\[(\w+)\]\s+Procesando coche\s+(\d+)/(\d+)", ln)
             if m:
+                c = m.group(1)
+                canal_actual = c
+                canal_current[c] = int(m.group(2))
+                canal_total[c] = int(m.group(3))
                 procesados += 1
-                canal = m.group(1)
-                current = int(m.group(2))
-                total = int(m.group(3))
+            mc = re.search(r"✅ Canal (\w+):", ln)
+            if mc:
+                completados.add(mc.group(1))
+
+        # Estimación de tamaño de pool para canales que aún no han arrancado
+        est_total = max(canal_total.values()) if canal_total else 0
+
+        # Progreso global sumando todos los canales planificados
+        global_done = 0
+        global_total = 0
+        for c in planificados:
+            t = canal_total.get(c, est_total)
+            global_total += t
+            if c in completados:
+                global_done += t
+            elif c in canal_current:
+                global_done += canal_current[c]
+            # si no ha empezado: 0
+
+        # índice 1-based del canal en curso dentro del plan
+        try:
+            canal_idx = planificados.index(canal_actual) + 1 if canal_actual else 0
+        except ValueError:
+            canal_idx = 0
+
         started = scraper_state.get("started_at")
         elapsed = int(time.time() - started) if started else 0
         self._json_response({
@@ -399,9 +454,13 @@ class PanelHandler(SimpleHTTPRequestHandler):
             "log": scraper_state["log"][-30:],  # Últimas 30 líneas
             "started_at": started,
             "elapsed": elapsed,
-            "canal": canal,
-            "current": current,
-            "total": total,
+            "canal": canal_actual,
+            "canal_idx": canal_idx,
+            "n_canales": len(planificados),
+            "canal_current": canal_current.get(canal_actual, 0),
+            "canal_total": canal_total.get(canal_actual, 0),
+            "current": global_done,     # progreso GLOBAL (para la barra)
+            "total": global_total,      # 100% = todos los canales
             "procesados": procesados,
         })
 
@@ -478,6 +537,11 @@ def lanzar_scraper_automatico(slot: str = None):
     print("⏰ Scheduler: lanzando scraper automático...")
     scraper_state["running"] = True
     scraper_state["started_at"] = time.time()
+    try:
+        with open(config_path or CONFIG_FILE) as f:
+            scraper_state["canales"] = _canales_planificados(json.load(f))
+    except Exception:
+        scraper_state["canales"] = ["24h", "ip"]
     scraper_state["log"] = ["⏰ Scraping automático iniciado por el programador..."]
 
     def run(cfg_path):
