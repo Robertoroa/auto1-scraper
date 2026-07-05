@@ -502,12 +502,19 @@ def iniciar_scheduler():
             h1 = config.get("schedule", {}).get("hora_scraping_1", "13:30")
             h2 = config.get("schedule", {}).get("hora_scraping_2", "20:00")
 
-            hora1, min1 = h1.split(":")
-            hora2, min2 = h2.split(":")
+            # Una hora vacía o null desactiva ese cron (scraping manual)
+            programadas = []
+            for h, job_id, slot in ((h1, "scraping_1", "1"), (h2, "scraping_2", "2")):
+                if not h or ":" not in str(h):
+                    continue
+                hora, minu = str(h).split(":")
+                scheduler.add_job(lanzar_scraper_automatico, CronTrigger(hour=hora, minute=minu), id=job_id, kwargs={"slot": slot})
+                programadas.append(h)
 
-            scheduler.add_job(lanzar_scraper_automatico, CronTrigger(hour=hora1, minute=min1), id="scraping_1", kwargs={"slot": "1"})
-            scheduler.add_job(lanzar_scraper_automatico, CronTrigger(hour=hora2, minute=min2), id="scraping_2", kwargs={"slot": "2"})
-            print(f"⏰ Scheduler programado: {h1} y {h2}")
+            if programadas:
+                print(f"⏰ Scheduler programado: {' y '.join(programadas)}")
+            else:
+                print("⏸️  Scheduler sin horas: scraping automático desactivado (solo manual)")
         except Exception as e:
             print(f"⚠️  Error al programar scheduler: {e}")
 

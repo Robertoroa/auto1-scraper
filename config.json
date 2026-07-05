@@ -29,8 +29,8 @@
     "delay_entre_requests_segundos": 3
   },
   "schedule": {
-    "hora_scraping_1": "13:30",
-    "hora_scraping_2": "18:30"
+    "hora_scraping_1": "",
+    "hora_scraping_2": ""
   },
   "mercado": {
     "buscar_wallapop": true,
