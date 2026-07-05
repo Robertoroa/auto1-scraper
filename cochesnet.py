@@ -3,7 +3,8 @@ Módulo de precios de mercado via coches.net.
 - Filtra solo anuncios "Super precio" (priceRankIndicator == 1)
 - Excluye coches con averías declaradas
 - Lógica "precio techo": acepta coches iguales o MEJORES (mismo año o más nuevo,
-  km hasta +20%) y descarta solo los claramente peores (mucho más viejos / más km)
+  km ≤ los nuestros) y descarta los peores. Solo si NO hay ningún comparable con
+  km ≤ el nuestro, se amplía la tolerancia hasta +20% km como último recurso.
 - Precio final = el más barato REALISTA (descarta precios ridículos: >30% por
   debajo del siguiente anuncio)
 - URL pattern para furgonetas: /{marca}/{modelo}/vehiculos-industriales/
@@ -217,10 +218,15 @@ def _tiene_dano(item: dict) -> bool:
     return False
 
 
-def _filtrar_items(items: list, año_obj: int, km_obj: int) -> list:
+def _filtrar_items(items: list, año_obj: int, km_obj: int, km_factor: float = 1.0) -> list:
     """
     Filtra items por condición base (sin averías, año/km similares).
     NO filtra por rank — eso se hace después según el plan A/B/C.
+
+    km_factor controla cuántos km de más se toleran respecto al coche objetivo:
+      - 1.0  → SOLO coches con km ≤ los nuestros (igual o mejor). Es el modo por defecto.
+      - 1.20 → tolera hasta +20% km (solo como último recurso si no hay comparables
+               con km ≤ el nuestro).
     """
     resultado = []
     for item in items:
@@ -235,12 +241,12 @@ def _filtrar_items(items: list, año_obj: int, km_obj: int) -> list:
             if int(año_item) < int(año_obj) - AÑO_MAX_ANTIGUEDAD:
                 continue
 
-        # Filtro por km (precio techo): descarta solo los que tienen MUCHOS más km.
-        # Menos km que el nuestro siempre cuenta (es mejor coche).
+        # Filtro por km (precio techo): NUNCA más km que el nuestro salvo que se
+        # amplíe el margen (km_factor). Menos km siempre cuenta (es mejor coche).
         km_item = item.get("km") or item.get("mileage") or 0
         if km_item > KM_MAX_ABSOLUTO:
             continue
-        if km_obj and km_obj > 0 and km_item > km_obj * KM_MAX_FACTOR:
+        if km_obj and km_obj > 0 and km_item > km_obj * km_factor:
             continue
 
         precio = item.get("price") or 0
@@ -390,9 +396,6 @@ def precio_mercado_cochesnet(marca: str, modelo: str, año: int, km: int) -> dic
             logger.info(f"   coches.net: sin anuncios para {marca} {modelo} {año}")
             return resultado_vacio
 
-        # Filtro base: sin averías + año/km similares (sin restricción de rank)
-        base = _filtrar_items(todos_items, año, km)
-
         def _mas_barato(items, rank=None):
             pool = [it for it in items if rank is None or it.get("priceRankIndicator") == rank]
             if len(pool) < 1:
@@ -400,23 +403,38 @@ def precio_mercado_cochesnet(marca: str, modelo: str, año: int, km: int) -> dic
             precio = _precio_mas_barato_realista(pool)
             return precio, len(pool)
 
-        # Plan A — Super precio
-        precio, n = _mas_barato(base, rank=1)
-        if precio and n >= 1:
-            logger.info(f"   coches.net ✅ {marca} {modelo} {año} [A-Super precio]: {n} anuncios | más barato realista={precio:,}€")
-            return {"precio_medio": precio, "n_anuncios": n, "fuente": "cochesnet", "url": url}
+        def _elegir(base, sufijo_km):
+            """Aplica los planes A/B/C sobre un pool ya filtrado por km."""
+            # Plan A — Super precio
+            precio, n = _mas_barato(base, rank=1)
+            if precio and n >= 1:
+                logger.info(f"   coches.net ✅ {marca} {modelo} {año} [A-Super precio{sufijo_km}]: {n} anuncios | más barato realista={precio:,}€")
+                return {"precio_medio": precio, "n_anuncios": n, "fuente": "cochesnet", "url": url}
+            # Plan B — Buen precio
+            precio, n = _mas_barato(base, rank=2)
+            if precio and n >= 1:
+                logger.info(f"   coches.net ✅ {marca} {modelo} {año} [B-Buen precio{sufijo_km}]: {n} anuncios | más barato realista={precio:,}€")
+                return {"precio_medio": precio, "n_anuncios": n, "fuente": "cochesnet", "url": url}
+            # Plan C — Todos los anuncios limpios
+            precio, n = _mas_barato(base, rank=None)
+            if precio and n >= 1:
+                logger.info(f"   coches.net ✅ {marca} {modelo} {año} [C-Todos{sufijo_km}]: {n} anuncios | más barato realista={precio:,}€")
+                return {"precio_medio": precio, "n_anuncios": n, "fuente": "cochesnet", "url": url}
+            return None
 
-        # Plan B — Buen precio
-        precio, n = _mas_barato(base, rank=2)
-        if precio and n >= 1:
-            logger.info(f"   coches.net ✅ {marca} {modelo} {año} [B-Buen precio]: {n} anuncios | más barato realista={precio:,}€")
-            return {"precio_medio": precio, "n_anuncios": n, "fuente": "cochesnet", "url": url}
+        # NIVEL 1 (preferente): solo coches con km ≤ los nuestros (igual o mejor).
+        base_estricto = _filtrar_items(todos_items, año, km, km_factor=1.0)
+        r = _elegir(base_estricto, sufijo_km="")
+        if r:
+            return r
 
-        # Plan C — Todos los anuncios limpios
-        precio, n = _mas_barato(base, rank=None)
-        if precio and n >= 1:
-            logger.info(f"   coches.net ✅ {marca} {modelo} {año} [C-Todos]: {n} anuncios | más barato realista={precio:,}€")
-            return {"precio_medio": precio, "n_anuncios": n, "fuente": "cochesnet", "url": url}
+        # NIVEL 2 (último recurso): si no había NINGÚN comparable con km ≤ el nuestro,
+        # se amplía la tolerancia hasta +20% km ("nunca más km salvo que no haya otra opción").
+        if km and km > 0:
+            base_amplio = _filtrar_items(todos_items, año, km, km_factor=KM_MAX_FACTOR)
+            r = _elegir(base_amplio, sufijo_km=" +20%km")
+            if r:
+                return r
 
         logger.info(f"   coches.net: sin anuncios válidos tras filtros para {marca} {modelo} {año}")
         return resultado_vacio
