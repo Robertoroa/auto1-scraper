@@ -105,6 +105,47 @@
       font-size: 0.78rem;
       font-weight: 600;
     }
+    /* Toggle ocultar averiados */
+    .toggle-averiados {
+      display: flex; align-items: center; gap: 8px;
+      cursor: pointer; user-select: none;
+    }
+    .switch { position: relative; width: 38px; height: 22px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch .slider-sw {
+      position: absolute; inset: 0; cursor: pointer;
+      background: var(--border); border-radius: 22px; transition: .2s;
+    }
+    .switch .slider-sw::before {
+      content: ""; position: absolute; height: 16px; width: 16px;
+      left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .2s;
+    }
+    .switch input:checked + .slider-sw { background: var(--accent); }
+    .switch input:checked + .slider-sw::before { transform: translateX(16px); }
+    /* Botón favorito (estrella) en la card */
+    .fav-star {
+      position: absolute; top: 10px; right: 10px; z-index: 5;
+      width: 34px; height: 34px; border-radius: 50%;
+      border: none; cursor: pointer;
+      background: rgba(0,0,0,.55); color: #fff;
+      font-size: 1.05rem; line-height: 34px; text-align: center;
+      transition: transform .12s, background .2s;
+    }
+    .fav-star:hover { transform: scale(1.12); }
+    .fav-star.on { background: #f4b400; color: #fff; }
+    /* Badge "ya no disponible" en favoritos */
+    .nodisp-badge {
+      position: absolute; top: 10px; left: 10px; z-index: 5;
+      background: #b00020; color: #fff; font-weight: 700;
+      font-size: 0.72rem; padding: 4px 9px; border-radius: 6px;
+    }
+    .card.no-disponible { opacity: .55; }
+    .fav-check-btn {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); padding: 5px 12px;
+      font-size: 0.8rem; cursor: pointer;
+    }
+    .fav-check-btn:hover { border-color: var(--accent); }
 
     /* ── Grid ── */
     .grid {
@@ -116,6 +157,7 @@
 
     /* ── Card ── */
     .card {
+      position: relative;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--card-radius);
@@ -399,6 +441,14 @@
       <option value="transp_desc">Transporte ↓</option>
     </select>
   </label>
+  <label class="toggle-averiados" title="Oculta coches con avería en motor, prueba dinámica o accidente">
+    <span class="switch">
+      <input type="checkbox" id="toggle-averiados" onchange="renderCanalActivo()">
+      <span class="slider-sw"></span>
+    </span>
+    Ocultar averiados
+  </label>
+  <button class="fav-check-btn" id="fav-check-btn" onclick="comprobarDisponibilidad()" style="display:none">↻ Comprobar disponibilidad</button>
   <span class="count-badge" id="count-badge">0 coches</span>
 </div>
 
@@ -413,26 +463,51 @@
 
 <script>
 // ── Estado ──────────────────────────────────────────────────────────
+const CANAL_FAV = '__fav__';
 let allData = {};      // { "24h": [...], "ip": [...] }
 let canalActivo = null;
 let cochesRender = []; // array ya ordenado que se está mostrando (para el popup de revisión)
+let favoritos = [];    // registros del servidor: { id, referencia, snapshot, disponible, ... }
+let favSet = new Set();// claves de favoritos para pintar la estrella rápido
+
+// ── Helpers de favoritos ─────────────────────────────────────────────
+function cocheKey(c) { return String(c?.id ?? c?.referencia ?? ''); }
+function esFavorito(c) { return favSet.has(cocheKey(c)); }
+function esAveriado(c) {
+  const rev = c?.revision || {};
+  const nAver = (rev.resumen?.averias || []).length;
+  return c?.danos_motor === true || nAver > 0 || !!rev.resumen?.accidente;
+}
 
 // ── Carga inicial ────────────────────────────────────────────────────
 async function cargarResultados() {
   document.getElementById('grid').innerHTML = '<div class="state-msg"><div class="spinner"></div>Cargando resultados...</div>';
   try {
+    await cargarFavoritos();
     const r = await fetch('/api/resultados');
     const json = await r.json();
     if (json.error && !json.canales) {
-      mostrarError(json.error); return;
+      allData = {};
+    } else {
+      allData = json.canales || {};
     }
-    allData = json.canales || {};
     document.getElementById('last-updated').textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-ES');
     construirTabs();
     renderCanalActivo();
   } catch(e) {
     mostrarError('No se pudo conectar con el servidor (' + e.message + ')');
   }
+}
+
+async function cargarFavoritos() {
+  try {
+    const r = await fetch('/api/favoritos');
+    const json = await r.json();
+    favoritos = json.favoritos || [];
+  } catch(e) {
+    favoritos = [];
+  }
+  favSet = new Set(favoritos.map(f => String(f.id ?? f.referencia ?? '')));
 }
 
 function mostrarError(msg) {
@@ -442,13 +517,16 @@ function mostrarError(msg) {
 // ── Tabs ─────────────────────────────────────────────────────────────
 function construirTabs() {
   const canales = Object.keys(allData);
-  if (!canales.length) return;
-  if (!canalActivo || !allData[canalActivo]) canalActivo = canales[0];
+  if (canalActivo !== CANAL_FAV && (!canalActivo || !allData[canalActivo])) {
+    canalActivo = canales[0] || CANAL_FAV;
+  }
 
   const labels = { '24h': '🔨 Subasta 24h', 'ip': '⚡ Compra Ahora' };
-  document.getElementById('tabs').innerHTML = canales.map(c =>
+  let html = canales.map(c =>
     `<div class="tab ${c === canalActivo ? 'active' : ''}" onclick="cambiarCanal('${c}')">${labels[c] || c} (${(allData[c]||[]).length})</div>`
   ).join('');
+  html += `<div class="tab ${canalActivo === CANAL_FAV ? 'active' : ''}" onclick="cambiarCanal('${CANAL_FAV}')">⭐ Favoritos (${favoritos.length})</div>`;
+  document.getElementById('tabs').innerHTML = html;
 }
 
 function cambiarCanal(c) {
@@ -457,10 +535,78 @@ function cambiarCanal(c) {
   renderCanalActivo();
 }
 
+// ── Favoritos ────────────────────────────────────────────────────────
+async function toggleFavorito(i) {
+  const c = cochesRender[i];
+  if (!c) return;
+  const key = cocheKey(c);
+  const yaEs = favSet.has(key);
+  try {
+    if (yaEs) {
+      await fetch('/api/favoritos/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: c.id, referencia: c.referencia })
+      });
+    } else {
+      // Guardamos el snapshot completo del coche (sin campos internos de UI)
+      const snapshot = { ...c };
+      delete snapshot.__disponible;
+      await fetch('/api/favoritos', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coche: snapshot })
+      });
+    }
+    await cargarFavoritos();
+    construirTabs();
+    renderCanalActivo();
+  } catch(e) {
+    alert('No se pudo actualizar el favorito: ' + e.message);
+  }
+}
+
+async function comprobarDisponibilidad() {
+  const btn = document.getElementById('fav-check-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Comprobando en Auto1...'; }
+  try {
+    await fetch('/api/favoritos/check', { method: 'POST' });
+    // El check corre en segundo plano en el servidor; refrescamos varias veces
+    let intentos = 0;
+    const timer = setInterval(async () => {
+      intentos++;
+      await cargarFavoritos();
+      if (canalActivo === CANAL_FAV) { construirTabs(); renderCanalActivo(); }
+      if (intentos >= 10) {
+        clearInterval(timer);
+        if (btn) { btn.disabled = false; btn.textContent = '↻ Comprobar disponibilidad'; }
+      }
+    }, 4000);
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Comprobar disponibilidad'; }
+    alert('No se pudo comprobar disponibilidad: ' + e.message);
+  }
+}
+
 // ── Render ────────────────────────────────────────────────────────────
 function renderCanalActivo() {
   const sort = document.getElementById('sort-select').value;
-  let coches = (allData[canalActivo] || []).slice();
+  const esFav = canalActivo === CANAL_FAV;
+
+  // Mostrar/ocultar el botón de comprobar disponibilidad (solo en favoritos)
+  const checkBtn = document.getElementById('fav-check-btn');
+  if (checkBtn) checkBtn.style.display = esFav ? '' : 'none';
+
+  let coches;
+  if (esFav) {
+    // Cada favorito lleva su snapshot + estado de disponibilidad
+    coches = favoritos.map(f => ({ ...f.snapshot, __disponible: f.disponible !== false }));
+  } else {
+    coches = (allData[canalActivo] || []).slice();
+  }
+
+  // Toggle "ocultar averiados"
+  if (document.getElementById('toggle-averiados')?.checked) {
+    coches = coches.filter(c => !esAveriado(c));
+  }
 
   const sorters = {
     rent_wp:    (a,b) => (b.rentabilidad_wallapop_pct ?? -999) - (a.rentabilidad_wallapop_pct ?? -999),
@@ -476,7 +622,10 @@ function renderCanalActivo() {
   document.getElementById('count-badge').textContent = coches.length + ' coche' + (coches.length !== 1 ? 's' : '');
 
   if (!coches.length) {
-    document.getElementById('grid').innerHTML = '<div class="state-msg">Sin resultados para este canal.</div>';
+    const msg = esFav
+      ? '⭐ Aún no tienes favoritos. Pulsa la estrella de cualquier coche para guardarlo aquí.'
+      : 'Sin resultados para este canal.';
+    document.getElementById('grid').innerHTML = `<div class="state-msg">${msg}</div>`;
     return;
   }
 
@@ -524,8 +673,13 @@ function cardHTML(c, i) {
   const wallapopUrl = c.wallapop_ref_url || c.wallapop_listing_url || '';
   const cochesnetUrl = c.cochesnet_url || '';
 
+  const fav = esFavorito(c);
+  const noDisp = c.__disponible === false;
+
   return `
-<div class="card">
+<div class="card${noDisp ? ' no-disponible' : ''}">
+  <button class="fav-star ${fav ? 'on' : ''}" title="${fav ? 'Quitar de favoritos' : 'Añadir a favoritos'}" onclick="event.stopPropagation(); toggleFavorito(${i})">${fav ? '★' : '☆'}</button>
+  ${noDisp ? '<span class="nodisp-badge">Ya no disponible</span>' : ''}
   <div class="slider" ${imgs.length ? `data-imgs='${JSON.stringify(imgs)}'` : ''}>
     ${imgs.length
       ? imgs.map(u => `<img src="${u}" alt="" loading="lazy"/>`).join('')

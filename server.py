@@ -21,7 +21,11 @@ UI_DIR = BASE_DIR / "ui"
 RESULTS_DIR = BASE_DIR / "resultados"
 CONFIG_FILE = BASE_DIR / "config.json"
 PROFILES_FILE = BASE_DIR / "profiles.json"
+FAVORITOS_FILE = BASE_DIR / "favoritos.json"
 LOG_FILE = BASE_DIR / "last_run.log"
+
+# Estado del check de disponibilidad de favoritos (para no lanzar dos a la vez)
+favoritos_check_state = {"running": False, "last_run": None}
 
 RESULTS_DIR.mkdir(exist_ok=True)
 
@@ -96,6 +100,8 @@ class PanelHandler(SimpleHTTPRequestHandler):
             self._json_response({"ok": ok})
         elif self.path == "/api/resultados":
             self._handle_get_resultados()
+        elif self.path == "/api/favoritos":
+            self._handle_get_favoritos()
         else:
             super().do_GET()
 
@@ -121,6 +127,12 @@ class PanelHandler(SimpleHTTPRequestHandler):
             self._handle_save_profile()
         elif self.path == "/delete-profile":
             self._handle_delete_profile()
+        elif self.path == "/api/favoritos":
+            self._handle_add_favorito()
+        elif self.path == "/api/favoritos/delete":
+            self._handle_delete_favorito()
+        elif self.path == "/api/favoritos/check":
+            self._handle_check_favoritos()
         else:
             self.send_response(404)
             self.end_headers()
@@ -353,6 +365,64 @@ class PanelHandler(SimpleHTTPRequestHandler):
         except Exception as e:
             self._json_response({"error": str(e), "canales": {}})
 
+    # ─────────────────────────── FAVORITOS ───────────────────────────
+    def _leer_favoritos(self) -> list:
+        try:
+            with open(FAVORITOS_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+
+    def _guardar_favoritos(self, favoritos: list):
+        with open(FAVORITOS_FILE, "w", encoding="utf-8") as f:
+            json.dump(favoritos, f, indent=2, ensure_ascii=False)
+
+    def _handle_get_favoritos(self):
+        self._json_response({"favoritos": self._leer_favoritos()})
+
+    def _handle_add_favorito(self):
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length)
+        data = json.loads(body)
+        coche = data.get("coche") or data
+        clave = str(coche.get("id") or coche.get("referencia") or "").strip()
+        if not clave:
+            self._json_response({"ok": False, "error": "Coche sin id/referencia"})
+            return
+        favoritos = self._leer_favoritos()
+        # Evitar duplicados: sobreescribir el snapshot si ya existía
+        favoritos = [f for f in favoritos if str(f.get("id") or f.get("referencia") or "") != clave]
+        favoritos.append({
+            "id": coche.get("id"),
+            "referencia": coche.get("referencia"),
+            "snapshot": coche,
+            "disponible": True,
+            "added_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "checked_at": None,
+        })
+        self._guardar_favoritos(favoritos)
+        self._json_response({"ok": True, "total": len(favoritos)})
+
+    def _handle_delete_favorito(self):
+        length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(length)
+        data = json.loads(body)
+        clave = str(data.get("id") or data.get("referencia") or "").strip()
+        favoritos = self._leer_favoritos()
+        favoritos = [f for f in favoritos if str(f.get("id") or f.get("referencia") or "") != clave]
+        self._guardar_favoritos(favoritos)
+        self._json_response({"ok": True, "total": len(favoritos)})
+
+    def _handle_check_favoritos(self):
+        """Lanza en segundo plano una comprobación de disponibilidad en Auto1.
+        Marca como no disponibles los favoritos que ya no estén en Auto1."""
+        if favoritos_check_state["running"]:
+            self._json_response({"ok": True, "running": True, "msg": "Ya en curso"})
+            return
+        favoritos_check_state["running"] = True
+        threading.Thread(target=_comprobar_disponibilidad_favoritos, daemon=True).start()
+        self._json_response({"ok": True, "running": True})
+
     def _handle_list_profiles(self):
         try:
             with open(PROFILES_FILE) as f:
@@ -500,6 +570,71 @@ def _cargar_filtros_perfil(nombre_perfil: str):
     except Exception:
         pass
     return None
+
+
+def _comprobar_disponibilidad_favoritos():
+    """Comprueba en Auto1 si cada favorito sigue disponible.
+    Marca disponible=False (sin borrar) los que devuelvan 404.
+    Solo lectura — GET puro a la ficha del coche."""
+    try:
+        try:
+            with open(FAVORITOS_FILE, encoding="utf-8") as f:
+                favoritos = json.load(f)
+        except Exception:
+            favoritos = []
+        if not favoritos:
+            return
+
+        import requests
+        from auth import cargar_cookies
+        from scraper import obtener_bearer_y_uuid, BASE_URL
+
+        cookies = cargar_cookies()
+        if not cookies:
+            print("⚠️  Check favoritos: sin cookies, abortando")
+            return
+        bearer_token, _uuid = obtener_bearer_y_uuid(cookies)
+        if not bearer_token:
+            print("⚠️  Check favoritos: sin bearer token, abortando")
+            return
+
+        headers = {
+            "Authorization": f"Bearer {bearer_token}",
+            "Accept": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+            "Origin": "https://www.auto1.com",
+            "Referer": "https://www.auto1.com/es/app/merchant/cars",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        }
+        session = requests.Session()
+        for name, value in cookies.items():
+            session.cookies.set(name, value, domain=".auto1.com")
+
+        ahora = time.strftime("%Y-%m-%dT%H:%M:%S")
+        for fav in favoritos:
+            coche_id = fav.get("id")
+            if not coche_id:
+                continue
+            try:
+                url = f"{BASE_URL}/v1/car-search/cars/{coche_id}"
+                r = session.get(url, headers=headers, timeout=30)
+                if r.status_code == 404:
+                    fav["disponible"] = False
+                elif r.status_code == 200:
+                    fav["disponible"] = True
+                fav["checked_at"] = ahora
+            except Exception as e:
+                print(f"⚠️  Check favorito {coche_id}: {e}")
+            time.sleep(2)
+
+        with open(FAVORITOS_FILE, "w", encoding="utf-8") as f:
+            json.dump(favoritos, f, indent=2, ensure_ascii=False)
+        print(f"✅ Check favoritos completado: {len(favoritos)} revisados")
+    except Exception as e:
+        print(f"⚠️  Error en check de favoritos: {e}")
+    finally:
+        favoritos_check_state["running"] = False
+        favoritos_check_state["last_run"] = time.strftime("%Y-%m-%dT%H:%M:%S")
 
 
 def lanzar_scraper_automatico(slot: str = None):
