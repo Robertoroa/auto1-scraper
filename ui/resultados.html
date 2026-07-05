@@ -395,6 +395,8 @@
       <option value="precio_asc">Precio Auto1 ↑</option>
       <option value="precio_desc">Precio Auto1 ↓</option>
       <option value="margen_wp">Margen Wallapop ↓</option>
+      <option value="transp_asc">Transporte ↑</option>
+      <option value="transp_desc">Transporte ↓</option>
     </select>
   </label>
   <span class="count-badge" id="count-badge">0 coches</span>
@@ -466,6 +468,8 @@ function renderCanalActivo() {
     precio_asc: (a,b) => (a.precio_auto1 ?? 0) - (b.precio_auto1 ?? 0),
     precio_desc:(a,b) => (b.precio_auto1 ?? 0) - (a.precio_auto1 ?? 0),
     margen_wp:  (a,b) => (b.margen_wallapop ?? -999999) - (a.margen_wallapop ?? -999999),
+    transp_asc: (a,b) => (a.transporte_coste ?? Infinity) - (b.transporte_coste ?? Infinity),
+    transp_desc:(a,b) => (b.transporte_coste ?? -1) - (a.transporte_coste ?? -1),
   };
   coches.sort(sorters[sort] || sorters.rent_wp);
 
