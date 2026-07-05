@@ -132,8 +132,8 @@ def _construir_query(año: int, km: int) -> str:
     """
     Construye la query string de filtros para coches.net.
 
-    - MinYear: descarta coches mucho más viejos (año − AÑO_MAX_ANTIGUEDAD).
-      Los más nuevos siempre entran (marcan el precio techo).
+    - MinYear: solo entran coches del mismo año o más nuevos que el nuestro.
+      Los más nuevos marcan el precio techo; los más viejos se descartan.
     - MaxKms: descarta coches con muchos más km (km_objetivo × KM_MAX_FACTOR).
       Los de menos km siempre entran (son mejores).
     - fi=Price&or=1: ordena por precio ASCENDENTE, así la primera página ya
@@ -142,7 +142,7 @@ def _construir_query(año: int, km: int) -> str:
     """
     params = ["fi=Price", "or=1"]
     if año and año > 1990:
-        params.append(f"MinYear={int(año) - AÑO_MAX_ANTIGUEDAD}")
+        params.append(f"MinYear={int(año)}")
     if km and km > 0:
         max_km = min(int(km * KM_MAX_FACTOR), KM_MAX_ABSOLUTO)
         params.append(f"MaxKms={max_km}")
