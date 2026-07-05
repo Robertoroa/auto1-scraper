@@ -987,7 +987,12 @@ def ejecutar_scraping():
             if not precio_raw:
                 logger.info(f"   ⏭️  Saltado: sin precio cierto (solo puja mínima, no calculable)")
                 continue
-            precio = round(precio_raw / 100) if precio_raw > 10000 else precio_raw
+            # Auto1 devuelve el precio en dos escalas según el anuncio: en euros
+            # (p.ej. 15500 = 15.500€) o en céntimos (p.ej. 1645500 = 16.455€).
+            # Los valores en euros de estos furgones no pasan de ~30.000 y los de
+            # céntimos empiezan en ~200.000, así que el corte en 100.000 separa
+            # ambos sin partir por 100 un buy-now real de más de 10.000€.
+            precio = round(precio_raw / 100) if precio_raw >= 100_000 else precio_raw
 
             referencia = coche.get("stockNumber", coche.get("auctionIdentifier", str(coche_id)))
 
@@ -1053,7 +1058,7 @@ def ejecutar_scraping():
                 "km": coche.get("km", coche.get("mileage", 0)),
                 "precio_auto1": precio,
                 "tipo_compra": tipo_compra,
-                "puja_minima": round(min_bid_raw / 100) if min_bid_raw > 10000 else min_bid_raw,
+                "puja_minima": round(min_bid_raw / 100) if min_bid_raw >= 100_000 else min_bid_raw,
                 "pais": coche.get("countryCode", ""),
                 "referencia": referencia,
                 "canal": canal,

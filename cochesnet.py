@@ -115,6 +115,11 @@ def _marca_slug(marca: str) -> str:
 
 def _modelo_slug(modelo: str) -> str:
     m = modelo.lower().strip()
+    # Volkswagen nombra sus furgonetas con la generación delante ("T6 Transporter",
+    # "T5 Caravelle"…), pero coches.net usa solo el modelo ("transporter",
+    # "caravelle"). Quitamos el prefijo de generación para no generar un slug
+    # inexistente que devolvería un listado genérico de la marca.
+    m = re.sub(r"^t[4-7]\s+", "", m)
     if m in _MODELO_FIXES:
         return _MODELO_FIXES[m]
     for sufijo in _SUFIJOS_VARIANTE:
@@ -220,9 +225,31 @@ def _tiene_dano(item: dict) -> bool:
     return False
 
 
-def _filtrar_items(items: list, año_obj: int, km_obj: int, km_factor: float = 1.0) -> list:
+def _token_modelo(modelo: str) -> str:
     """
-    Filtra items por condición base (sin averías, año/km similares).
+    Devuelve la palabra más distintiva del modelo objetivo (la más larga de ≥3
+    letras), ya sin la generación VW. Se usa para descartar anuncios de OTRO
+    modelo: p.ej. un slug erróneo devuelve un listado genérico de la marca
+    (Golf, Polo…) y este token evita colar un Golf como si fuera un Transporter.
+    """
+    m = re.sub(r"^t[4-7]\s+", "", modelo.lower().strip())
+    m = re.sub(r"[^a-z0-9 ]", " ", m)
+    palabras = [w for w in m.split() if len(w) >= 3]
+    return max(palabras, key=len) if palabras else ""
+
+
+def _modelo_coincide(item: dict, token: str) -> bool:
+    """True si el anuncio pertenece al modelo objetivo (o si no hay token útil)."""
+    if not token:
+        return True
+    texto = f"{item.get('model') or ''} {item.get('title') or ''}".lower()
+    return token in texto
+
+
+def _filtrar_items(items: list, año_obj: int, km_obj: int, km_factor: float = 1.0,
+                   modelo_obj: str = "") -> list:
+    """
+    Filtra items por condición base (sin averías, año/km similares, mismo modelo).
     NO filtra por rank — eso se hace después según el plan A/B/C.
 
     km_factor controla cuántos km de más se toleran respecto al coche objetivo:
@@ -230,8 +257,13 @@ def _filtrar_items(items: list, año_obj: int, km_obj: int, km_factor: float = 1
       - 1.20 → tolera hasta +20% km (solo como último recurso si no hay comparables
                con km ≤ el nuestro).
     """
+    token = _token_modelo(modelo_obj)
     resultado = []
     for item in items:
+        # Mismo modelo (red de seguridad contra slugs que devuelven la marca entera)
+        if not _modelo_coincide(item, token):
+            continue
+
         # Sin daños declarados
         if _tiene_dano(item):
             continue
@@ -343,7 +375,7 @@ def _buscar_con_playwright(marca: str, modelo: str, año: int, km: int) -> dict:
                             resultado = {"items_filtrados": [], "todos_items": [], "precios_mercado_regex": precios_regex, "n_super_precio": 0, "url": url}
                         continue
 
-                    filtrados = _filtrar_items(todos_items, año, km)
+                    filtrados = _filtrar_items(todos_items, año, km, modelo_obj=modelo)
                     n_super = sum(1 for it in todos_items if it.get("priceRankIndicator") == 1)
 
                     logger.debug(
@@ -425,7 +457,7 @@ def precio_mercado_cochesnet(marca: str, modelo: str, año: int, km: int) -> dic
             return None
 
         # NIVEL 1 (preferente): solo coches con km ≤ los nuestros (igual o mejor).
-        base_estricto = _filtrar_items(todos_items, año, km, km_factor=1.0)
+        base_estricto = _filtrar_items(todos_items, año, km, km_factor=1.0, modelo_obj=modelo)
         r = _elegir(base_estricto, sufijo_km="")
         if r:
             return r
@@ -433,7 +465,7 @@ def precio_mercado_cochesnet(marca: str, modelo: str, año: int, km: int) -> dic
         # NIVEL 2 (último recurso): si no había NINGÚN comparable con km ≤ el nuestro,
         # se amplía la tolerancia hasta +20% km ("nunca más km salvo que no haya otra opción").
         if km and km > 0:
-            base_amplio = _filtrar_items(todos_items, año, km, km_factor=KM_MAX_FACTOR)
+            base_amplio = _filtrar_items(todos_items, año, km, km_factor=KM_MAX_FACTOR, modelo_obj=modelo)
             r = _elegir(base_amplio, sufijo_km=" +20%km")
             if r:
                 return r
