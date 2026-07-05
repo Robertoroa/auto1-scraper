@@ -406,7 +406,7 @@ class PanelHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def _cargar_filtros_perfil(nombre_perfil: str) -> dict | None:
+def _cargar_filtros_perfil(nombre_perfil: str):
     """Devuelve los filtros de un perfil guardado, o None si no existe."""
     if not nombre_perfil:
         return None
