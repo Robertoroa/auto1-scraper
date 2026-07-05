@@ -771,7 +771,7 @@
         <div class="range-row">
           <input type="number" id="m-mileageFrom" value="0" min="0" step="10000" placeholder="Mín">
           <span>→</span>
-          <input type="number" id="m-mileageTo" value="130000" step="10000" placeholder="Máx">
+          <input type="number" id="m-mileageTo" value="200000" step="10000" placeholder="Máx">
         </div>
       </div>
 
@@ -787,26 +787,26 @@
       <div class="filter-group">
         <label>País</label>
         <select id="m-countries">
-          <option value="ES" selected>🇪🇸 Solo España</option>
+          <option value="ES">🇪🇸 Solo España</option>
           <option value="ES,PT">🇪🇸🇵🇹 España + Portugal</option>
           <option value="ES,FR,PT">🇪🇸🇫🇷🇵🇹 España + Francia + Portugal</option>
-          <option value="ALL">🌍 Toda Europa</option>
+          <option value="ALL" selected>🌍 Toda Europa</option>
         </select>
       </div>
 
       <div class="filter-group">
         <label>Sin daños en motor</label>
         <select id="m-testDriveFindings">
-          <option value="none" selected>✅ Sin hallazgos específicos</option>
-          <option value="all">Todos (con y sin daños)</option>
+          <option value="none">✅ Sin hallazgos específicos</option>
+          <option value="all" selected>Todos (con y sin daños)</option>
         </select>
       </div>
 
       <div class="filter-group">
         <label>Sin accidentes</label>
         <select id="m-accidents">
-          <option value="false" selected>✅ Sin accidentes</option>
-          <option value="true">Todos</option>
+          <option value="false">✅ Sin accidentes</option>
+          <option value="true" selected>Todos</option>
         </select>
       </div>
 
@@ -1687,6 +1687,87 @@
       .catch(() => {});
   }
 
+  // ── PRESETS DE FÁBRICA (hardcoded) ──────────────────────────
+  const FACTORY_PRESETS = [
+    {
+      name: '🚐 Furgonetas H1 — Europa completa',
+      config: {
+        filtros: {
+          canales: ['24h', 'ip'],
+          countries: ['ES','FR','DE','PT','IT','NL','BE','PL'],
+          testDriveFindings: 'all',
+          accidents: true,
+          mileageFrom: 0,
+          mileageTo: 200000,
+          priceMin: 2000,
+          priceMax: 9000,
+          regFrom: 2016,
+          regTo: 2026,
+          bodyTypes: ['commercial', 'van'],
+          makes: [
+            { make: 'Volkswagen', models: ['Crafter', 'Transporter'] },
+            { make: 'Mercedes-Benz', models: ['Sprinter', 'Vito', 'V-Klasse'] },
+            { make: 'Ford', models: ['Transit', 'Transit Custom'] },
+            { make: 'Renault', models: ['Trafic', 'Master'] },
+            { make: 'Opel', models: ['Vivaro', 'Movano'] },
+            { make: 'Peugeot', models: ['Expert', 'Boxer'] },
+            { make: 'Citroën', models: ['Jumpy', 'Relay'] },
+            { make: 'Fiat', models: ['Ducato', 'Scudo'] },
+            { make: 'Nissan', models: ['NV400', 'NV300'] },
+            { make: 'Toyota', models: ['ProAce'] },
+            { make: 'Hyundai', models: ['H1'] },
+            { make: 'Kia', models: ['Carnival'] }
+          ]
+        },
+        seguridad: { max_coches: 100, dry_run: false, delay_entre_requests_segundos: 3 }
+      }
+    }
+  ];
+
+  function loadFactoryPreset(idx) {
+    const preset = FACTORY_PRESETS[idx];
+    if (!preset) return;
+    const f = preset.config.filtros || {};
+    const s = preset.config.seguridad || {};
+    // Canal
+    const canalesLoad = f.canales || ['24h', 'ip'];
+    selectedManualChannels = new Set(canalesLoad);
+    manualChannel = canalesLoad[0];
+    document.querySelectorAll('.manual-vertical-card').forEach(c => {
+      const badge = c.querySelector('.channel-badge');
+      if (!badge) return;
+      const ch = badge.textContent.includes('24h') ? '24h' : 'ip';
+      c.classList.toggle('active', selectedManualChannels.has(ch));
+    });
+    if (f.priceMin  !== undefined) document.getElementById('m-priceMin').value  = f.priceMin;
+    if (f.priceMax  !== undefined) document.getElementById('m-priceMax').value  = f.priceMax;
+    if (f.mileageFrom !== undefined) document.getElementById('m-mileageFrom').value = f.mileageFrom;
+    if (f.mileageTo   !== undefined) document.getElementById('m-mileageTo').value   = f.mileageTo;
+    if (f.regFrom !== undefined) document.getElementById('m-regFrom').value = f.regFrom;
+    if (f.regTo   !== undefined) document.getElementById('m-regTo').value   = f.regTo;
+    if (f.countries) {
+      const v = f.countries.join(',');
+      const sel = document.getElementById('m-countries');
+      // Si es toda Europa usar ALL
+      if (f.countries.length >= 6) { sel.value = 'ALL'; } else {
+        [...sel.options].forEach(o => { if (o.value === v) sel.value = v; });
+      }
+    }
+    if (f.testDriveFindings !== undefined) document.getElementById('m-testDriveFindings').value = f.testDriveFindings;
+    if (f.accidents !== undefined) document.getElementById('m-accidents').value = String(f.accidents);
+    if (f.makes && f.makes.length) {
+      state.manual.makes  = f.makes.map(m => m.make).filter(Boolean);
+      state.manual.models = f.makes.flatMap(m => m.models || []);
+    } else { state.manual.makes = []; state.manual.models = []; }
+    renderMsTags('m-make');  updateMsLabel('m-make');
+    renderMsTags('m-model'); updateMsLabel('m-model');
+    setBodyTypes('manual', f.bodyTypes || []);
+    if (s.max_coches) {
+      document.getElementById('m-maxCars').value = s.max_coches;
+      document.getElementById('m-max-cars-display').textContent = s.max_coches;
+    }
+  }
+
   // ── PRESETS SCRAPING PUNTUAL (localStorage) ────────────────
 
   function _getPresets() {
@@ -1775,11 +1856,26 @@
   function renderManualPresets() {
     const presets = _getPresets();
     const container = document.getElementById('manual-presets-list');
-    if (!presets.length) {
-      container.innerHTML = '<p style="color:#aaa;font-size:12px;font-style:italic;margin:0;">No hay presets guardados aún.</p>';
-      return;
-    }
-    container.innerHTML = presets.map(p => {
+
+    // Presets de fábrica (siempre visibles)
+    const factoryHtml = FACTORY_PRESETS.map((p, idx) => {
+      const f = p.config?.filtros || {};
+      const models = (f.makes || []).flatMap(m => m.models || []);
+      const summary = `${models.length} modelos · ${f.priceMin}–${f.priceMax}€ · hasta ${f.mileageTo/1000}k km`;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:#f0f7ff;border:1.5px solid #4a90d9;border-radius:8px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:#333;">${p.name}</div>
+          <div style="font-size:11px;color:#777;">${summary}</div>
+          <div style="font-size:10px;color:#aaa;">Preset de fábrica</div>
+        </div>
+        <button onclick="loadFactoryPreset(${idx})"
+                style="padding:5px 12px;background:#4a90d9;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">
+          📂 Cargar
+        </button>
+      </div>`;
+    }).join('');
+
+    const userHtml = presets.length ? presets.map(p => {
       const f = p.config?.filtros || {};
       const models = (f.makes || []).flatMap(m => m.models || []);
       const bts = (f.bodyTypes || []).join(', ') || '—';
@@ -1804,7 +1900,9 @@
           🗑
         </button>
       </div>`;
-    }).join('');
+    }).join('') : '';
+
+    container.innerHTML = factoryHtml + (userHtml ? '<div style="margin:6px 0 2px;font-size:11px;color:#aaa;font-style:italic;">Presets guardados</div>' + userHtml : '');
   }
 
   // Cargar al inicio — el formulario puntual hereda los bodyTypes del config.json
