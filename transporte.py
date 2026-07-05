@@ -106,8 +106,21 @@ def obtener_ficha_y_transporte(referencia: str, coche_id: str, cookies: dict) ->
                     !u.includes('badge') && !u.includes('avatar')
                 ).slice(0, 25);
             }""")
+            # ── Filtrar SOLO las fotos de este coche ────────────────────────
+            # El DOM incluye miniaturas del carrusel de "coches similares"
+            # (URLs tipo .../pa/sr-x2-{OTRA_REF}_...jpg). Las fotos del propio
+            # coche llevan su referencia en el nombre (.../pa/max-{REF}_...jpg).
             if imagenes_dom:
-                logger.info(f"   📷 {len(imagenes_dom)} fotos extraídas del DOM para {referencia}")
+                ref_low = str(referencia).lower()
+                propias = [u for u in imagenes_dom if ref_low in u.lower()]
+                if propias:
+                    imagenes_dom = propias
+                else:
+                    # Fallback: descartar las miniaturas de resultados de búsqueda
+                    imagenes_dom = [u for u in imagenes_dom
+                                    if "/sr-x2-" not in u and "/sr-" not in u]
+            if imagenes_dom:
+                logger.info(f"   📷 {len(imagenes_dom)} fotos (solo {referencia}) extraídas del DOM")
         except Exception as e:
             logger.warning(f"⚠️  Error cargando ficha {referencia}: {e}")
         finally:

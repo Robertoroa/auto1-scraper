@@ -751,6 +751,122 @@ def tiene_danos_motor(detalle: dict) -> bool:
     return False
 
 
+# ── Traducciones para el informe de revisión (popup del panel) ──────────────
+_TRAD_COMPONENTE = {
+    "speedometer": "Velocímetro", "engine": "Motor", "gears": "Cambio",
+    "steering": "Dirección", "suspension": "Suspensión", "brakes": "Frenos",
+    "clutch": "Embrague", "ac": "Aire acondicionado", "lights": "Luces",
+    "navigation system": "Sistema de navegación", "other noise level": "Nivel de ruido",
+    "electronics": "Electrónica", "exhaust": "Escape", "battery": "Batería",
+    "handbrake": "Freno de mano", "parking brake": "Freno de estacionamiento",
+}
+_TRAD_DETALLE = {
+    "standing": "Parado", "at start": "Al arrancar", "while driving": "En marcha",
+    "rough running noise": "Funcionamiento irregular / ruido",
+    "unusual noises": "Ruidos anómalos", "no performance": "Falta de potencia",
+    "public street lower speed": "Vía pública a baja velocidad",
+    "public street higher speed": "Vía pública a alta velocidad",
+}
+_TRAD_ZONA = {
+    "damage body back": "Carrocería · trasera", "damage body front": "Carrocería · delantera",
+    "damage body right": "Carrocería · lateral derecho", "damage body left": "Carrocería · lateral izquierdo",
+    "damage body top": "Carrocería · techo", "damage interior": "Interior",
+    "damage wheels": "Ruedas / llantas", "damage engine": "Motor",
+    "damage underbody": "Bajos", "damage glass": "Cristales",
+}
+_TRAD_PARTE = {
+    "tailgate": "Portón trasero", "bonnet": "Capó", "roof": "Techo",
+    "front right door": "Puerta delantera derecha", "front left door": "Puerta delantera izquierda",
+    "rear right door": "Puerta trasera derecha", "rear left door": "Puerta trasera izquierda",
+    "front right fender": "Aleta delantera derecha", "front left fender": "Aleta delantera izquierda",
+    "rear right fender": "Aleta trasera derecha", "rear left fender": "Aleta trasera izquierda",
+    "bumper front": "Parachoques delantero", "bumper rear": "Parachoques trasero",
+    "front bumper": "Parachoques delantero", "rear bumper": "Parachoques trasero",
+    "hood": "Capó", "windscreen": "Parabrisas", "rear window": "Luna trasera",
+    "left mirror": "Retrovisor izquierdo", "right mirror": "Retrovisor derecho",
+    "sill": "Faldón lateral", "wheel": "Rueda / llanta",
+}
+_TRAD_TIPO = {
+    "scratch": "Arañazo", "dent": "Abolladura", "rust": "Óxido", "crack": "Grieta",
+    "broken": "Roto", "missing": "Falta", "paint damage": "Daño en pintura",
+    "chip": "Impacto de piedra", "stone chip": "Impacto de piedra", "scuff": "Rozadura",
+    "worn": "Desgaste", "repaint": "Repintado", "body gap": "Desajuste de carrocería",
+    "corrosion": "Corrosión", "hail": "Granizo", "bent": "Deformado",
+}
+
+
+def _humanizar(clave: str, tabla: dict) -> str:
+    """Traduce una clave i18n; si no está en la tabla, la formatea legible."""
+    if not clave:
+        return ""
+    limpio = (str(clave)
+              .replace("global.damages.sub_sections.", "").replace("global.damages.", "")
+              .replace("STD.", "").replace(".ok.yes", "").replace(".ok", "")
+              .replace(".", " ").replace("-", " ").replace("_", " ").strip().lower())
+    if limpio in tabla:
+        return tabla[limpio]
+    return limpio.capitalize()
+
+
+def construir_revision(detalle: dict) -> dict:
+    """
+    Construye un informe de revisión legible (en español) a partir de la ficha
+    car-details-view: prueba dinámica, daños de carrocería y accidentes.
+    Marca como 'avería' cualquier componente con defecto funcional.
+    """
+    vacio = {"prueba_dinamica": [], "danos": [], "accidente": None,
+             "resumen": {"averias": [], "n_danos": 0, "accidente": False}}
+    if not detalle:
+        return vacio
+    meta = detalle.get("meta", {}) or {}
+
+    # ── Prueba dinámica (structuredTestDrive) ──────────────────────────────
+    prueba = []
+    averias = []
+    std = meta.get("structuredTestDrive") or {}
+    for item in (std.get("form") or []):
+        comp = _humanizar(item.get("name", ""), _TRAD_COMPONENTE)
+        defecto = bool(item.get("defected"))
+        detalles = []
+        for g in (item.get("groups") or []):
+            for tk in (g.get("translationKeys") or []):
+                detalles.append(_humanizar(tk, _TRAD_DETALLE))
+        prueba.append({"componente": comp, "ok": not defecto, "detalles": detalles})
+        if defecto:
+            averias.append(comp)
+
+    # ── Daños de carrocería (damages) ──────────────────────────────────────
+    danos = []
+    n_danos = 0
+    for sec in (meta.get("damages") or []):
+        zona = _humanizar(sec.get("subSectionValue") or sec.get("subSectionValueKey", ""), _TRAD_ZONA)
+        partes = []
+        for p in (sec.get("parts") or []):
+            partes.append({
+                "parte": _humanizar(p.get("partKey", ""), _TRAD_PARTE),
+                "tipo": _humanizar(p.get("descriptionKey", ""), _TRAD_TIPO),
+            })
+            n_danos += 1
+        if partes:
+            danos.append({"zona": zona, "partes": partes})
+
+    # ── Accidentes ─────────────────────────────────────────────────────────
+    accidente = None
+    tiene_acc = False
+    for a in (meta.get("accidents") or []):
+        if a.get("hasAccident"):
+            tiene_acc = True
+            accidente = {"reparado": a.get("repaired"), "coste": a.get("repairCost")}
+            break
+
+    return {
+        "prueba_dinamica": prueba,
+        "danos": danos,
+        "accidente": accidente,
+        "resumen": {"averias": averias, "n_danos": n_danos, "accidente": tiene_acc},
+    }
+
+
 def tiene_compra_inmediata(detalle: dict) -> bool:
     """
     Para coches de subasta 24h: devuelve True solo si tienen botón 'Cómpralo ahora'.
@@ -938,6 +1054,7 @@ def ejecutar_scraping():
                 "transporte_dias": transporte.get("transporte_dias"),
                 "transporte_opcion": transporte.get("transporte_opcion"),
                 "imagenes": ficha.get("imagenes", []),
+                "revision": construir_revision(detalle),
                 "auto1_url": f"https://www.auto1.com/es/app/merchant/car/{referencia}",
             })
 
