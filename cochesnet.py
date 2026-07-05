@@ -37,6 +37,8 @@ GAP_OUTLIER      = 0.30  # si el más barato está >30% por debajo del siguiente
 AÑO_MAX_ANTIGUEDAD = 3      # se aceptan coches hasta 3 años más viejos; más nuevos, sin límite
 KM_MAX_FACTOR      = 1.20   # máx km = km_objetivo * 1.20 (20% más); menos km, sin límite
 KM_MAX_ABSOLUTO    = 250_000  # tope duro si no conocemos los km del coche objetivo
+KM_BLOQUE_CACHE    = 30_000  # granularidad de km en la clave de caché: coches con km
+                             # dentro del mismo bloque de 30.000 comparten precio y URL
 
 # Campos de coches.net que indican daños o avería
 _CAMPOS_DANO = [
@@ -451,7 +453,9 @@ def precio_mercado_cochesnet(marca: str, modelo: str, año: int, km: int) -> dic
 def enriquecer_con_precios_cochesnet(coches: list) -> list:
     """
     Añade precio_mercado_cochesnet a cada coche usando coches.net.
-    Agrupa por marca/modelo/bloque-de-años para reutilizar caché entre años similares.
+    Agrupa por marca/modelo/bloque-de-años/bloque-de-km para reutilizar caché entre
+    coches muy parecidos, pero SIN mezclar km distintos (el precio y la URL de
+    referencia dependen de los km, así que cada bloque de km tiene su propia entrada).
     """
     cache = _cargar_cache()
 
@@ -461,9 +465,11 @@ def enriquecer_con_precios_cochesnet(coches: list) -> list:
         año = coche.get("año") or 0
         km = coche.get("km") or 0
 
-        # Agrupar en bloques de 2 años para reutilizar cache entre años similares
+        # Agrupar en bloques de 2 años y de KM_BLOQUE_CACHE km para reutilizar cache
+        # entre coches similares sin mezclar km muy diferentes.
         año_bloque = (año // 2) * 2
-        clave = f"{_marca_slug(marca)}_{_modelo_slug(modelo)}_{año_bloque}"
+        km_bloque = (int(km) // KM_BLOQUE_CACHE) * KM_BLOQUE_CACHE
+        clave = f"{_marca_slug(marca)}_{_modelo_slug(modelo)}_{año_bloque}_{km_bloque}km"
 
         if clave in cache:
             mercado = cache[clave]
