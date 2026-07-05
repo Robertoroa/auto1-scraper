@@ -24,7 +24,7 @@
     "pageSize": 100
   },
   "seguridad": {
-    "max_coches": 10,
+    "max_coches": 250,
     "dry_run": false,
     "delay_entre_requests_segundos": 3
   },
