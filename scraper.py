@@ -576,7 +576,11 @@ def buscar_coches_via_playwright(cookies, filtros) -> list:
             makes_log = [m.get('make') for m in makes_filtro] or ["todas"]
             logger.info(f"   🔎 Filtros API: bodyTypes={body_types} | marcas={makes_log} | objetivo={page_size}")
 
-            api_batch = MAX_CARS
+            # Auto1 limita el tamaño de página de búsqueda a 50 (aunque pidas más)
+            # y pagina por el campo 'page' (ignora 'offset'). Por eso hay que
+            # incrementar 'page' en cada vuelta; si se deja fijo en 0 la API
+            # devuelve siempre los mismos 50 coches.
+            api_batch = 50
             hits_filtrados = []
             pagina = 0
             offset_actual = 0
@@ -585,8 +589,8 @@ def buscar_coches_via_playwright(cookies, filtros) -> list:
 
             while True:
                 body["filters"]["pageSize"] = api_batch
-                body["filters"]["page"] = 0
-                body["filters"]["offset"] = offset_actual
+                body["filters"]["page"] = pagina
+                body["filters"]["offset"] = 0
 
                 bearer = bearer_captured.get("token", "")
                 result = page.evaluate("""
