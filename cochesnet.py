@@ -2,7 +2,8 @@
 Módulo de precios de mercado via coches.net.
 - Filtra solo anuncios "Super precio" (priceRankIndicator == 1)
 - Excluye coches con averías declaradas
-- Filtra por año similar (±3 años) y km razonables
+- Lógica "precio techo": acepta coches iguales o MEJORES (mismo año o más nuevo,
+  km hasta +20%) y descarta solo los claramente peores (mucho más viejos / más km)
 - Precio final = media de los 3 más baratos que pasen los filtros
 - URL pattern para furgonetas: /{marca}/{modelo}/vehiculos-industriales/
 - URL pattern para coches:     /{marca}/{modelo}/segunda-mano/
@@ -26,10 +27,14 @@ CACHE_FILE = Path(__file__).parent / "logs" / "cochesnet_cache.json"
 MIN_SUPER_PRECIO = 2   # mínimo de anuncios "Super precio" limpios para considerar el dato fiable
 N_TOP_BARATOS    = 3   # cuántos de los más baratos promediar
 
-# Tolerancias para filtrar por año y km
-AÑO_TOLERANCIA  = 3    # ±3 años respecto al coche que valoramos
-KM_MAX_FACTOR   = 2.0  # máx km = km_objetivo * este factor (si km_objetivo > 0)
-KM_MAX_ABSOLUTO = 250_000  # nunca aceptar más de esto aunque km_objetivo sea 0
+# Tolerancias para filtrar por año y km — LÓGICA DE "PRECIO TECHO".
+# Un coche MÁS NUEVO o con MENOS km siempre es comparable (es igual o mejor que el
+# nuestro): si además es más barato, marca el techo de precio y el nuestro no puede
+# valer más. Solo se descartan los claramente PEORES: mucho más viejos o con
+# muchos más km que el nuestro.
+AÑO_MAX_ANTIGUEDAD = 3      # se aceptan coches hasta 3 años más viejos; más nuevos, sin límite
+KM_MAX_FACTOR      = 1.20   # máx km = km_objetivo * 1.20 (20% más); menos km, sin límite
+KM_MAX_ABSOLUTO    = 250_000  # tope duro si no conocemos los km del coche objetivo
 
 # Campos de coches.net que indican daños o avería
 _CAMPOS_DANO = [
@@ -200,13 +205,15 @@ def _filtrar_items(items: list, año_obj: int, km_obj: int) -> list:
         if _tiene_dano(item):
             continue
 
-        # Filtro por año
+        # Filtro por año (precio techo): descarta solo los claramente MÁS VIEJOS.
+        # Un coche igual o más nuevo que el nuestro siempre cuenta como comparable.
         año_item = item.get("year") or item.get("registrationYear") or 0
         if año_obj and año_item:
-            if abs(int(año_item) - int(año_obj)) > AÑO_TOLERANCIA:
+            if int(año_item) < int(año_obj) - AÑO_MAX_ANTIGUEDAD:
                 continue
 
-        # Filtro por km
+        # Filtro por km (precio techo): descarta solo los que tienen MUCHOS más km.
+        # Menos km que el nuestro siempre cuenta (es mejor coche).
         km_item = item.get("km") or item.get("mileage") or 0
         if km_item > KM_MAX_ABSOLUTO:
             continue
