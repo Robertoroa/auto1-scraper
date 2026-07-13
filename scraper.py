@@ -163,14 +163,31 @@ def obtener_bearer_y_uuid(cookies: dict) -> tuple:
         page.on("request", on_request)
 
         try:
-            page.goto("https://www.auto1.com/es/app/merchant/cars", wait_until="domcontentloaded", timeout=20000)
-            # Esperar hasta 10s a que llegue el token
-            for _ in range(20):
+            # 'commit' se resuelve en cuanto la navegación arranca (muy pronto):
+            # no bloqueamos esperando a que toda la página cargue, porque el token
+            # llega en una request de red que suele dispararse antes.
+            page.goto("https://www.auto1.com/es/app/merchant/cars",
+                      wait_until="commit", timeout=60000)
+        except Exception as e:
+            logger.warning(f"⚠️  Aviso al navegar (se sigue esperando el token): {e}")
+
+        # El Bearer llega interceptando una request; esperarlo con reintentos
+        # y recarga, independientemente de si la página terminó de cargar.
+        try:
+            for intento in range(3):
+                for _ in range(60):  # hasta 30s por intento
+                    if bearer:
+                        break
+                    page.wait_for_timeout(500)
                 if bearer:
                     break
-                page.wait_for_timeout(500)
-        except Exception as e:
-            logger.warning(f"⚠️  Timeout cargando página: {e}")
+                logger.warning(f"⚠️  Token no capturado (intento {intento + 1}/3), recargando...")
+                try:
+                    page.reload(wait_until="commit", timeout=60000)
+                except Exception:
+                    pass
+            if not bearer:
+                logger.warning("⚠️  No se pudo capturar el Bearer token tras 3 intentos")
         finally:
             browser.close()
 
