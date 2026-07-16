@@ -86,10 +86,11 @@ def construir_body_busqueda(filtros: dict) -> dict:
     if filtros.get("bodyTypes"):
         filters["bodyTypes"] = filtros["bodyTypes"]
 
-    if filtros.get("makes"):
-        filters["makes"] = filtros["makes"]
-    elif filtros.get("manufacturers"):
-        filters["makes"] = [{"make": m} for m in filtros["manufacturers"]]
+    # IMPORTANTE: NO enviamos 'makes' a la API.
+    # La API de Auto1 espera IDs numéricos de marca, no nombres. Enviar
+    # {"make": "Volkswagen"} devuelve 0 resultados. El filtrado por marca y
+    # modelo se hace client-side en _match_make() (Estrategia B, siempre activa),
+    # así que descargamos el stock comercial completo y filtramos en local.
 
     return {
         "textSearchId": None,
