@@ -54,6 +54,31 @@ def _sesion_activa(context):
     return any(c["name"] == "isUserLogged" and c["value"] == "true" for c in cookies)
 
 
+def enviar_formulario_login(page):
+    """
+    Envía el formulario de login de Auto1.
+    Auto1 rediseñó la web (oct 2026): ya no existe `button.btn-primary`; los botones
+    usan clases CSS-modules con hash (Button_button__xxx) y el texto "Accede".
+    Estrategia robusta: Enter en el campo contraseña y, si no navega, clic en el
+    botón submit del propio formulario.
+    """
+    pass_input = page.locator("#login-password").first
+    pass_input.press("Enter")
+    for _ in range(5):
+        time.sleep(1)
+        if "signin" not in page.url:
+            return
+    for sel in ("form:has(#login-password) button[type=submit]",
+                "button:has-text('Accede'):visible"):
+        try:
+            btn = page.locator(sel).last
+            if btn.count():
+                btn.click(force=True)
+                return
+        except Exception:
+            continue
+
+
 def autologin():
     """
     Login automático usando credenciales locales.
@@ -77,7 +102,7 @@ def autologin():
             )
             page = context.pages[0] if context.pages else context.new_page()
 
-            page.goto(AUTO1_SIGNIN_URL, wait_until="domcontentloaded", timeout=20000)
+            page.goto(AUTO1_SIGNIN_URL, wait_until="domcontentloaded", timeout=45000)
             time.sleep(2)
 
             current_url = page.url
@@ -111,9 +136,7 @@ def autologin():
             pass_input.fill(password, force=True)
             time.sleep(0.5)
 
-            # Botón visible "Acceder" — force=True para saltar comprobaciones de visibilidad
-            submit = page.locator("button.btn-primary:visible").first
-            submit.click(force=True)
+            enviar_formulario_login(page)
 
             # Esperar redirección hasta 30s
             for _ in range(30):

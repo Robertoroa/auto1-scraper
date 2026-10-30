@@ -353,9 +353,9 @@ def buscar_coches_via_playwright(cookies, filtros) -> list:
         _current_url = page.url
         if not any(x in _current_url for x in ["merchant", "/app/"]):
             logger.info("   Sesión caducada en perfil — autologin dentro del scraper...")
-            from auth import AUTO1_SIGNIN_URL, _cargar_credenciales
+            from auth import AUTO1_SIGNIN_URL, _cargar_credenciales, enviar_formulario_login
             _email, _password = _cargar_credenciales()
-            page.goto(AUTO1_SIGNIN_URL, wait_until="domcontentloaded", timeout=20000)
+            page.goto(AUTO1_SIGNIN_URL, wait_until="domcontentloaded", timeout=45000)
             _time.sleep(2)
             try:
                 _cb = page.locator("button:has-text('ACEPTAR')")
@@ -368,7 +368,7 @@ def buscar_coches_via_playwright(cookies, filtros) -> list:
             _time.sleep(0.3)
             page.locator("#login-password").first.fill(_password, force=True)
             _time.sleep(0.3)
-            page.locator("button.btn-primary:visible").first.click(force=True)
+            enviar_formulario_login(page)
             for _ in range(30):
                 _time.sleep(1)
                 if any(x in page.url for x in ["merchant/cars", "/app/"]):
