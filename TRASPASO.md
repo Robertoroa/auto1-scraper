@@ -1,7 +1,8 @@
-# TRASPASO — Sistema Auto1 Scraper
+# TRASPASO — Sistema Auto1 Scraper (AutoRadar Pro)
 
 > Documento de relevo para que cualquier cuenta de Claude (u otra persona) retome
 > este proyecto sin contexto previo. Léelo entero antes de tocar nada.
+> Última actualización: 2 nov 2026 — migración de Mac 2 a este MacBook.
 
 ## 1. Qué es esto
 
@@ -10,132 +11,119 @@ y compra inmediata) y lo compara con precios de mercado en **Wallapop** y **coch
 para detectar oportunidades de compra-reventa rentables. Tiene un panel web de
 configuración y otro de resultados con favoritos.
 
-## 2. Arquitectura: dos máquinas
+## 2. Arquitectura: UNA máquina
 
-| | Mac 1 (desarrollo) | Mac 2 (servidor 24/7) |
-|---|---|---|
-| Rol | Editar código | Ejecutar el sistema |
-| Tailscale IP | — | **100.116.208.4** |
-| Ruta del repo | `~/Documents/auto1-scraper` | `/Users/robertoderoaperez/auto1-scraper` |
+Desde el 30 oct 2026 el sistema corre **solo en el MacBook de Roberto** (usuario
+macOS `roberto`, Apple Silicon). **Mac 2 está retirada**: no se usa, no se despliega
+allí y no hay que contar con su API de admin (puerto 4000) ni con Tailscale.
 
-**El sistema real corre SOLO en Mac 2.** Mac 1 es solo el editor.
+| | MacBook (servidor y desarrollo) |
+|---|---|
+| Ruta del repo | `/Users/roberto/Documents/auto1-scraper` |
+| Python | `venv/` con el Python del sistema (3.9) — el código usa `from __future__ import annotations` |
+| Procesos | pm2 (`auto1-scraper`, `autoradar-tunnel`) |
 
-## 3. Flujo de despliegue (SIEMPRE así)
+> ⚠️ Si alguien vuelve a encender Mac 2 con su túnel activo, Cloudflare repartirá
+> el tráfico entre las dos máquinas. En Mac 2: `pm2 stop auto1-scraper autoradar-tunnel caddy-autoradar && pm2 save`.
 
-1. Editar código en Mac 1.
-2. `git commit` + `git push origin main`.
-3. Desplegar en Mac 2 vía API de admin (NUNCA pedir al usuario que teclee en Mac 2).
+## 3. Flujo de cambios
 
-**Qué requiere cada cambio:**
-- `scraper.py`, `cochesnet.py`, `wallapop.py`, `transporte.py` → solo `git pull` (corren como subproceso nuevo en cada scrapeo).
-- `server.py` → `git pull` **+ `pm2 restart auto1-scraper`** (es el proceso del panel).
-- HTML estático (`ui/index.html`, `ui/resultados.html`) → solo `git pull`.
+1. Editar el código en `/Users/roberto/Documents/auto1-scraper`.
+2. `git commit` + `git push origin main` (el Mac tiene credenciales de GitHub).
+3. Qué requiere cada cambio:
+   - `scraper.py`, `cochesnet.py`, `wallapop.py`, `transporte.py`, `auth.py` → nada (corren como subproceso nuevo en cada scrapeo).
+   - `server.py` → `pm2 restart auto1-scraper`.
+   - HTML estático (`ui/index.html`, `ui/resultados.html`) → nada.
 
-## 4. API de admin de Mac 2 (cómo ejecutar comandos remotos)
+**Cómo trabaja Claude en este Mac:** la sesión enlazada al Mac da acceso a la carpeta
+`Documents` y un shell Linux sin red hacia el Mac. Para ejecutar en macOS (git push,
+pm2, pruebas con Playwright) Claude escribe un script `.command` en `Documents`, lo
+abre con doble clic desde Finder (control del ordenador) y lee el log que deja en
+`Documents/*.log`. Nunca pedir al usuario que teclee comandos.
 
+## 4. Procesos pm2
+
+- **`auto1-scraper`** → el panel (`server.py`), puerto **8765**, intérprete `venv/bin/python3`.
+- **`autoradar-tunnel`** → `cloudflared tunnel --config ~/.cloudflared/config-autoradarpro.yml run`.
+- `whatsapp-agents` → otro proyecto (Agent Force). No tocar.
+
+Arranque automático tras reiniciar: LaunchAgent `~/Library/LaunchAgents/es.autoradarpro.pm2.plist`
+(ejecuta `pm2 resurrect` al iniciar sesión). Antisueño: LaunchAgent
+`es.autoradarpro.caffeinate.plist` (`caffeinate -is`; con la tapa cerrada y sin
+pantalla externa el Mac se duerme igualmente).
+
+Lanzar un scrapeo puntual (usa la config actual, no toca crons):
 ```bash
-# 1. Login → JWT
-TOKEN=$(curl -s -X POST http://100.116.208.4:4000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"<ADMIN_EMAIL>","password":"<ADMIN_PASS>"}' \
-  | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
-
-# 2. Ejecutar cualquier comando en Mac 2
-curl -s -X POST http://100.116.208.4:4000/api/admin/exec \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"cmd":"cd /Users/robertoderoaperez/auto1-scraper && git pull origin main"}'
-```
-
-> Las credenciales admin (`<ADMIN_EMAIL>` / `<ADMIN_PASS>`) están en el `CLAUDE.md`
-> global del usuario y en el checklist de credenciales del traspaso. NO se guardan aquí.
-
-## 5. Procesos pm2 en Mac 2
-
-- **`auto1-scraper`** → el panel (`server.py`), puerto **8765**. Este es el nuestro.
-- `wallaagent-admin` → API de admin, puerto 4000.
-- `autoradar-tunnel`, `caddy-autoradar` → túnel Cloudflare + proxy.
-- (Otros procesos `wallapop-agent-*`, `wallaagent-*` son de otros proyectos; no tocar.)
-
-Lanzar un scrapeo puntual desde Mac 2 (usa la config actual, no toca crons):
-```bash
-cd /Users/robertoderoaperez/auto1-scraper && ./venv/bin/python3 -c \
+cd /Users/roberto/Documents/auto1-scraper && ./venv/bin/python3 -c \
 "import json,urllib.request; cfg=json.load(open('config.json')); \
-req=urllib.request.Request('http://localhost:8765/run-scraper-now', \
+req=urllib.request.Request('http://127.0.0.1:8765/run-scraper-now', \
 data=json.dumps(cfg).encode(), headers={'Content-Type':'application/json'}); \
 print(urllib.request.urlopen(req).read().decode())"
 ```
-Seguir el progreso: `tail -f /Users/robertoderoaperez/auto1-scraper/last_run.log`
+Progreso: `tail -f /Users/roberto/Documents/auto1-scraper/last_run.log`
 
-## 6. Dominios (todos apuntan a Mac 2 vía Cloudflare)
+## 5. Dominios (todos vía túnel Cloudflare → este Mac)
 
 - **https://autoradarpro.es** ← principal
 - https://www.autoradarpro.es
 - https://autoradar.wallaagent.es
 
-El panel sirve `ui/index.html` (config) y `ui/resultados.html` (resultados + favoritos).
-Dominio `autoradarpro.es` gestionado en Don Dominio (credenciales en la memoria del usuario).
+Túnel con nombre `autoradarpro` (ID `74815dfd-424d-4e32-b795-8d3471628e12`).
+Credenciales en `~/.cloudflared/` (`cert.pem`, `<ID>.json`, `config-autoradarpro.yml`).
+El ingress apunta a **`http://127.0.0.1:8765`** (no `localhost`, que resolvía a IPv6
+y dejaba las webs caídas). Comprobar qué máquina sirve el dominio:
+`cloudflared tunnel --origincert ~/.cloudflared/cert.pem info 74815dfd-424d-4e32-b795-8d3471628e12`.
 
-> Ojo: el dominio correcto de la org es **wallaagent.es** (dos "a"). `wallagent.es` no resuelve.
+Dominio `autoradarpro.es` gestionado en Don Dominio. El dominio correcto de la org es
+**wallaagent.es** (dos "a"). El panel **no tiene login**: cualquiera con la URL puede usarlo.
 
-## 7. Componentes del código
+## 6. Componentes del código
 
 | Archivo | Qué hace |
 |---|---|
 | `scraper.py` | Orquestador. Autentica en Auto1 (captura Bearer token con Playwright), descarga stock, filtra, enriquece con precios de mercado y rentabilidad. |
-| `cochesnet.py` | Precio de mercado en coches.net (Playwright `headless=False` fuera de pantalla por detección de bots). |
+| `auth.py` | Sesión de Auto1: perfil persistente, autologin con credenciales de `.env`, login manual de último recurso. |
+| `cochesnet.py` | Precio de mercado en coches.net (headless "nuevo" de Chrome; si bloquea, pasa solo a ventana fuera de pantalla). |
 | `wallapop.py` | Precio de mercado en Wallapop. |
 | `transporte.py` | Ficha del coche, coste de transporte y cálculo de rentabilidad/coste total. |
-| `auth.py` | Carga de cookies de sesión Auto1. |
-| `server.py` | Servidor HTTP del panel + endpoints (config, lanzar scrapeo, resultados, favoritos). |
-| `ui/index.html` | Panel de configuración de filtros (auto + manual). |
+| `server.py` | Servidor HTTP del panel + endpoints (config, lanzar scrapeo, resultados, favoritos) + scheduler (APScheduler). |
+| `ui/index.html` | Panel de configuración de filtros (auto + manual) y horas de scrapeo. |
 | `ui/resultados.html` | Visor de resultados: tabs por canal, orden, toggle "ocultar averiados", pestaña Favoritos. |
 
-## 8. Archivos de datos / secretos (NO están en Git — viven en Mac 2)
+## 7. Archivos de datos / secretos (NO están en Git — viven en el Mac)
 
 | Archivo | Qué es | Notas |
 |---|---|---|
-| `cookies.json` | Sesión de Auto1 | Caduca; hay que renovarla cuando expira (login). |
-| `config.json` | Filtros activos | **Difiere entre Mac 1 y Mac 2.** No se commitea para no pisar la de Mac 2. El scraper usa defaults si falta un campo. |
-| `favoritos.json` | Favoritos del panel (lado servidor) | Snapshot completo de cada coche; persiste entre scrapeos. |
+| `.env` | `AUTO1_EMAIL` / `AUTO1_PASSWORD` | Usado por el autologin. |
+| `cookies.json` | Sesión de Auto1 | Se regenera sola al hacer login. |
+| `config.json` | Filtros activos y horas de scrapeo | No se commitea. |
+| `favoritos.json` | Favoritos del panel | Snapshot completo de cada coche. |
 | `profiles.json` | Perfiles de búsqueda guardados | |
-| `.env` | Variables de entorno | |
-| `google_credentials.json` | Cuenta de servicio Google Sheets | ⚠️ Ver problemas conocidos. |
-| `cochesnet_profile/`, `browser_profile/` | Perfiles persistentes de Playwright | |
+| `google_credentials.json` | Cuenta de servicio Google Sheets | ⚠️ Clave caducada, ver pendientes. |
+| `browser_profile/` | Perfil persistente de Playwright con la sesión de Auto1 | |
+| `resultados/resultados_latest.json` | Último resultado | |
 
-## 9. Detalles técnicos que cuesta descubrir (aprendidos a base de bugs)
+Copia de seguridad de lo traído de Mac 2: `~/Documents/autoradar-datos.zip` y `autoradar-tunel.zip`.
 
-- **Precios de Auto1 vienen en DOS escalas**: euros (`15500` = 15.500 €) o céntimos
-  (`1645500` = 16.455 €). Regla: si el valor crudo `>= 100000` se divide entre 100.
-- **Captura del Bearer token**: se intercepta de una request de red, no de la carga de
-  la página. Usar `wait_until="commit"`, timeout 60s y reintentos con recarga. NO depender
-  de `domcontentloaded`.
-- **Filtro de marcas**: la API de Auto1 espera IDs numéricos, NO nombres. Enviar
-  `{"make":"Volkswagen"}` en el body devuelve 0 resultados. El filtrado de marca/modelo
-  se hace **client-side** en `_match_make()`. Por eso `construir_body_busqueda()` NO mete
-  `makes` en el body: se descarga el stock comercial completo y se filtra en local.
-- **coches.net MinYear** usa el año exacto del coche (no año − 3). Y hay un filtro de
-  modelo (`_modelo_coincide`) como red de seguridad contra slugs que devuelven la marca
-  entera (ej. VW T6 → antes traía Golf/Polo y daba precios absurdos).
-- **Filtro de averías**: flag `excluir_averias` (por defecto `True`) descarta coches con
-  daño en motor o avería en prueba dinámica. Checkbox en el panel de config.
+## 8. Detalles técnicos que cuesta descubrir (aprendidos a base de bugs)
 
-## 10. Problemas conocidos / pendientes
+- **Precios de Auto1 en DOS escalas**: euros (`15500`) o céntimos (`1645500`). Si el valor crudo `>= 100000` se divide entre 100.
+- **Bearer token**: se intercepta de una request de red. `wait_until="commit"`, timeout 60s y reintentos.
+- **Filtro de marcas**: la API de Auto1 espera IDs numéricos; el filtrado de marca/modelo es **client-side** en `_match_make()`.
+- **Login de Auto1 (rediseño oct 2026)**: ya no existe `button.btn-primary`; los botones usan clases CSS-modules con hash y el texto "Accede". `enviar_formulario_login()` pulsa Enter en la contraseña y, si no navega, clica el submit del formulario. La URL `/es/merchant/signin` redirige a `/es/home/signin`.
+- **coches.net**: bloquea el headless antiguo. Con `channel="chromium"` (headless nuevo) + user-agent normal funciona (probado 2 nov 2026). Variable `COCHESNET_MODO=ventana` fuerza el modo antiguo. `MinYear` usa el año exacto y `_modelo_coincide` evita slugs que traen la marca entera. "Super precio" siempre sale 0 (ya pasaba en Mac 2): el cálculo cae al nivel "más barato realista".
+- **Filtro de averías**: `excluir_averias` (por defecto `True`).
 
-- **Google Sheets**: la cuenta de servicio da `invalid_grant: Invalid JWT Signature`.
-  Necesita una **clave nueva** de la consola de Google Cloud (acción del usuario).
-- **Túnel Cloudflare** apunta a `localhost:8765`, que resuelve a IPv6 (`[::1]`) mientras
-  el panel escucha en IPv4 (`0.0.0.0`). Si el panel se reinicia mal, puede quedar
-  "online" en pm2 sin tener el puerto abierto → las webs devuelven error. Fix recomendado
-  (pendiente): cambiar el ingress del túnel de `localhost` a `127.0.0.1`.
-- **Mac 1 tiene su propio panel + túnel** (`panel.autoradarpro.es`) arrancados por agentes
-  launchd. Puede abrir navegador en Mac 1 en vez de Mac 2. Se ofreció desactivar los
-  agentes launchd (pendiente de confirmación del usuario).
+## 9. Problemas conocidos / pendientes
 
-## 11. Cómo retomar desde cero (checklist para la cuenta nueva)
+- **Google Sheets**: `invalid_grant: Invalid JWT Signature`. Necesita clave nueva de la cuenta de servicio en Google Cloud (acción del usuario) → sustituir `google_credentials.json`.
+- **Scrapeos automáticos**: `config.json → schedule` tiene las horas vacías; sin horas no hay scrapeos programados.
+- **Login manual**: si el autologin falla, se abre una ventana de Chrome y espera 10 min a que el usuario meta la contraseña.
+- **Panel sin autenticación** (ver §5).
 
-1. Clonar el repo: `git clone https://github.com/Robertoroa/auto1-scraper.git`
-2. Tener a mano las **credenciales** (ver checklist aparte — no van en Git):
-   admin de Mac 2, acceso SSH a Mac 2, Don Dominio.
-3. Verificar que Mac 2 responde: `curl http://100.116.208.4:4000/api/auth/login ...`
-4. Para cualquier cambio → editar → commit/push → `git pull` en Mac 2 (+ restart si es `server.py`).
-5. NO hace falta ejecutar nada en local: el sistema corre en Mac 2.
+## 10. Cómo retomar desde cero
+
+1. Enlazar la sesión al MacBook y pedir acceso a `~/Documents`.
+2. Leer este documento y `last_run.log`.
+3. Verificar: `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8765/` (vía `.command`) y que https://autoradarpro.es carga.
+4. Cambios → editar → commit/push desde el Mac (+ `pm2 restart auto1-scraper` si es `server.py`).
