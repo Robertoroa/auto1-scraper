@@ -15,6 +15,7 @@ Módulo de precios de mercado via coches.net.
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 import random
@@ -318,29 +319,61 @@ def _precio_mas_barato_realista(items_filtrados: list, gap: float = GAP_OUTLIER)
 # Búsqueda con Playwright
 # ─────────────────────────────────────────
 
+# Modo del navegador para coches.net:
+#   "headless" → sin ventana (headless "nuevo" de Chrome, channel="chromium"; no molesta)
+#   "ventana"  → ventana real fuera de pantalla (modo antiguo, abre icono en el Dock)
+# Si en modo headless coches.net bloquea (ninguna URL devuelve datos), se cambia
+# automáticamente a "ventana" para el resto de la ejecución.
+_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+)
+_MODO_NAVEGADOR = os.environ.get("COCHESNET_MODO", "headless")
+
+
 def _buscar_con_playwright(marca: str, modelo: str, año: int, km: int) -> dict:
+    global _MODO_NAVEGADOR
+    resultado, bloqueado = _buscar_con_playwright_modo(marca, modelo, año, km, _MODO_NAVEGADOR)
+    if bloqueado and _MODO_NAVEGADOR == "headless":
+        logger.warning("   coches.net: modo sin ventana bloqueado → paso a modo ventana fuera de pantalla")
+        _MODO_NAVEGADOR = "ventana"
+        resultado, _ = _buscar_con_playwright_modo(marca, modelo, año, km, "ventana")
+    return resultado
+
+
+def _buscar_con_playwright_modo(marca: str, modelo: str, año: int, km: int, modo: str):
+    """Devuelve (resultado, bloqueado). bloqueado=True si ninguna URL trajo datos de la página."""
     import tempfile, shutil
     from playwright.sync_api import sync_playwright
 
     urls = _construir_urls(marca, modelo, año, km)
     resultado_vacio = {"items_filtrados": [], "todos_items": [], "precios_mercado_regex": [], "n_super_precio": 0, "url": ""}
+    paginas_con_datos = 0
 
-    # coches.net bloquea el modo headless (fingerprinting avanzado).
-    # Usamos headless=False con ventana fuera de pantalla (-10000,-10000).
+    # coches.net bloquea el headless antiguo (fingerprinting avanzado). El headless
+    # "nuevo" (channel="chromium") es el Chrome completo sin ventana y suele pasar.
     # Perfil temporal limpio por sesión para evitar acumulación de señales de bot.
+    args = [
+        "--no-sandbox",
+        "--disable-blink-features=AutomationControlled",
+        "--window-size=1280,800",
+    ]
+    if modo == "headless":
+        opciones = {"headless": True, "channel": "chromium"}
+    else:
+        opciones = {"headless": False}
+        args.append("--window-position=-10000,-10000")
+
     tmp_profile = tempfile.mkdtemp(prefix="cn_")
     try:
         with sync_playwright() as p:
             context = p.chromium.launch_persistent_context(
                 user_data_dir=tmp_profile,
-                headless=False,
-                args=[
-                    "--no-sandbox",
-                    "--disable-blink-features=AutomationControlled",
-                    "--window-position=-10000,-10000",
-                    "--window-size=1280,800",
-                ],
+                args=args,
                 ignore_default_args=["--enable-automation"],
+                viewport={"width": 1280, "height": 800},
+                user_agent=_USER_AGENT if modo == "headless" else None,
+                **opciones,
             )
             page = context.new_page()
             page.add_init_script(
@@ -356,6 +389,8 @@ def _buscar_con_playwright(marca: str, modelo: str, año: int, km: int) -> dict:
                     time.sleep(1.5)
 
                     script_data = page.evaluate(_JS_EXTRACTOR)
+                    if script_data.get("found"):
+                        paginas_con_datos += 1
                     if not script_data.get("found"):
                         logger.debug(f"   coches.net: sin __INITIAL_PROPS__ en {url}")
                         continue
@@ -401,7 +436,7 @@ def _buscar_con_playwright(marca: str, modelo: str, año: int, km: int) -> dict:
     finally:
         shutil.rmtree(tmp_profile, ignore_errors=True)
 
-    return resultado
+    return resultado, (paginas_con_datos == 0 and bool(urls))
 
 
 # ─────────────────────────────────────────
